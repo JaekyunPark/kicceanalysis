@@ -1,0 +1,655 @@
+{% extends 'surveys/base.html' %}
+{% load static %}
+
+{% block title %}변수 변환 (RECODE){% endblock %}
+
+{% block extra_css %}
+<style>
+    .recode-container {
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+    
+    .rule-item {
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        padding: 15px;
+        margin-bottom: 10px;
+        background-color: #f8f9fa;
+    }
+    
+    .rule-item .form-row {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+    
+    .rule-item input,
+    .rule-item select {
+        flex: 1;
+    }
+    
+    .rule-item .btn-sm {
+        flex: 0 0 auto;
+    }
+    
+    .preview-table {
+        max-height: 400px;
+        overflow-y: auto;
+    }
+    
+    .preview-table table {
+        font-size: 0.9rem;
+    }
+    
+    .changed-row {
+        background-color: #fff3cd;
+    }
+    
+    .existing-rules {
+        margin-top: 30px;
+    }
+    
+    .existing-rule-item {
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        padding: 15px;
+        margin-bottom: 10px;
+        background-color: white;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="recode-container py-4">
+    <h2 class="mb-4">변수 변환 (RECODE)</h2>
+    
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">새 변환 규칙 만들기</h5>
+                </div>
+                <div class="card-body">
+                    <form id="recodeForm">
+                        {% csrf_token %}
+                        
+                        <!-- 데이터셋 선택 -->
+                        <div class="mb-3">
+                            <label for="dataset" class="form-label">데이터셋</label>
+                            <select class="form-select" id="dataset" name="dataset_id" required>
+                                <option value="">선택하세요</option>
+                                {% for dataset in datasets %}
+                                <option value="{{ dataset.id }}" data-has-codebook="{{ dataset.codebooks.exists }}">
+                                    {{ dataset.name }}
+                                    {% if dataset.codebooks.exists %}
+                                    <span class="badge bg-success">코드북 연결됨</span>
+                                    {% endif %}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <small class="form-text text-muted" id="codebookInfo"></small>
+                        </div>
+                        
+                        <!-- 원본 변수 선택 -->
+                        <div class="mb-3">
+                            <label for="source_variable" class="form-label">원본 변수</label>
+                            <select class="form-select" id="source_variable" name="source_variable" required disabled>
+                                <option value="">먼저 데이터셋을 선택하세요</option>
+                            </select>
+                        </div>
+                        
+                        <!-- 새 변수명 -->
+                        <div class="mb-3">
+                            <label for="target_variable" class="form-label">새 변수명</label>
+                            <input type="text" class="form-control" id="target_variable" name="target_variable" 
+                                   placeholder="예: gender_text, age_group" required>
+                            <small class="form-text text-muted">영문, 숫자, 언더스코어(_)만 사용 가능</small>
+                        </div>
+                        
+                        <!-- 새 변수 레이블 -->
+                        <div class="mb-3">
+                            <label for="variable_label" class="form-label">새 변수 레이블 (Variable Label)</label>
+                            <input type="text" class="form-control" id="variable_label" name="variable_label" 
+                                   placeholder="예: 성별(텍스트), 연령대">
+                            <small class="form-text text-muted">통계 분석 시 표시될 변수 이름</small>
+                        </div>
+                        
+                        <!-- 규칙 이름 -->
+                        <div class="mb-3">
+                            <label for="rule_name" class="form-label">규칙 이름</label>
+                            <input type="text" class="form-control" id="rule_name" name="rule_name" 
+                                   placeholder="예: 성별 숫자→텍스트 변환" required>
+                        </div>
+                        
+                        <!-- 변환 규칙들 -->
+                        <div class="mb-3">
+                            <label class="form-label">변환 규칙</label>
+                            <div id="rules-container">
+                                <!-- 규칙들이 여기에 추가됨 -->
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-primary mt-2" id="addRuleBtn">
+                                <i class="bi bi-plus"></i> 규칙 추가
+                            </button>
+                        </div>
+                        
+                        <!-- 버튼들 -->
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-info" id="previewBtn" disabled>
+                                <i class="bi bi-eye"></i> 미리보기
+                            </button>
+                            <button type="submit" class="btn btn-success" id="applyBtn" disabled>
+                                <i class="bi bi-check"></i> 저장 및 적용
+                            </button>
+                            <button type="button" class="btn btn-secondary" id="resetBtn">
+                                <i class="bi bi-arrow-clockwise"></i> 초기화
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <!-- 원본 변수 값 분포 -->
+            <div class="card mb-3" id="valueDistCard" style="display: none;">
+                <div class="card-header">
+                    <h6 class="mb-0">원본 값 분포</h6>
+                </div>
+                <div class="card-body">
+                    <div id="valueDistribution" style="max-height: 300px; overflow-y: auto;">
+                        <!-- 값 분포가 여기에 표시됨 -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 도움말 -->
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0">도움말</h6>
+                </div>
+                <div class="card-body">
+                    <h6>변환 규칙 타입:</h6>
+                    <ul class="small">
+                        <li><strong>단일값:</strong> 특정 값을 다른 값으로 변환<br>
+                            예: 1 → 남성</li>
+                        <li><strong>범위:</strong> 범위 내 값을 하나의 값으로 변환<br>
+                            예: 20-29 → 20대</li>
+                        <li><strong>조건:</strong> 조건에 맞는 값 변환<br>
+                            예: >= 60 → 합격</li>
+                    </ul>
+                    
+                    <h6 class="mt-3">주의사항:</h6>
+                    <ul class="small">
+                        <li>원본 데이터는 변경되지 않습니다</li>
+                        <li>새 변수가 데이터셋에 추가됩니다</li>
+                        <li>같은 이름의 변수가 있으면 덮어씁니다</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 미리보기 모달 -->
+    <div class="modal fade" id="previewModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">변환 미리보기</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="preview-table">
+                        <table class="table table-sm table-bordered">
+                            <thead>
+                                <tr>
+                                    <th>원본 값</th>
+                                    <th>새 값</th>
+                                    <th>빈도</th>
+                                    <th>비율</th>
+                                </tr>
+                            </thead>
+                            <tbody id="previewTableBody">
+                                <!-- 미리보기 데이터 -->
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <h6 class="mt-3">새 값별 빈도</h6>
+                    <div id="newValueCounts"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 기존 규칙 목록 -->
+    <div class="existing-rules">
+        <h4>저장된 변환 규칙</h4>
+        {% if existing_rules %}
+        <div class="row">
+            {% for rule in existing_rules %}
+            <div class="col-md-6 mb-3">
+                <div class="existing-rule-item">
+                    <h6>{{ rule.name }}</h6>
+                    <p class="mb-1 small text-muted">
+                        데이터셋: {{ rule.dataset.name }}<br>
+                        {{ rule.source_variable }} → {{ rule.target_variable }}<br>
+                        규칙 수: {{ rule.rules|length }}개
+                    </p>
+                    {% if rule.description %}
+                    <p class="mb-2 small">{{ rule.description }}</p>
+                    {% endif %}
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-sm btn-outline-primary load-rule-btn" data-rule-id="{{ rule.id }}">
+                            <i class="bi bi-upload"></i> 불러오기
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger delete-rule-btn" data-rule-id="{{ rule.id }}">
+                            <i class="bi bi-trash"></i> 삭제
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-muted">저장된 규칙이 없습니다.</p>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+let ruleCounter = 0;
+let currentDatasetId = null;
+let currentVariable = null;
+
+// 데이터셋 선택 시
+document.getElementById('dataset').addEventListener('change', function() {
+    const datasetId = this.value;
+    currentDatasetId = datasetId;
+    
+    if (datasetId) {
+        // 코드북 정보 표시
+        const selectedOption = this.options[this.selectedIndex];
+        const hasCodebook = selectedOption.getAttribute('data-has-codebook') === 'True';
+        const codebookInfo = document.getElementById('codebookInfo');
+        
+        if (hasCodebook) {
+            codebookInfo.innerHTML = '<i class="bi bi-check-circle text-success"></i> 이 데이터셋에 코드북이 연결되어 있습니다. 값 레이블이 자동으로 표시됩니다.';
+            codebookInfo.className = 'form-text text-success';
+        } else {
+            codebookInfo.innerHTML = '<i class="bi bi-info-circle"></i> 코드북이 연결되지 않았습니다. 값만 표시됩니다.';
+            codebookInfo.className = 'form-text text-muted';
+        }
+        
+        loadVariables(datasetId);
+    } else {
+        document.getElementById('source_variable').disabled = true;
+        document.getElementById('source_variable').innerHTML = '<option value="">먼저 데이터셋을 선택하세요</option>';
+        document.getElementById('codebookInfo').innerHTML = '';
+    }
+});
+
+// 변수 목록 로드
+function loadVariables(datasetId) {
+    console.log('Loading variables for dataset:', datasetId);
+    
+    fetch(`/api/variables/${datasetId}/`)
+        .then(response => {
+            console.log('Response status:', response.status);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Variables loaded:', data);
+            const select = document.getElementById('source_variable');
+            select.innerHTML = '<option value="">선택하세요</option>';
+            data.variables.forEach(variable => {
+                select.innerHTML += `<option value="${variable}">${variable}</option>`;
+            });
+            select.disabled = false;
+        })
+        .catch(error => {
+            console.error('Error loading variables:', error);
+            alert('변수 목록을 불러오는데 실패했습니다.\n\n오류: ' + error.message + '\n\n개발자 도구(F12) 콘솔을 확인하세요.');
+        });
+}
+
+// 원본 변수 선택 시
+document.getElementById('source_variable').addEventListener('change', function() {
+    const variable = this.value;
+    currentVariable = variable;
+    
+    if (variable && currentDatasetId) {
+        loadValueDistribution(currentDatasetId, variable);
+        document.getElementById('previewBtn').disabled = false;
+        document.getElementById('applyBtn').disabled = false;
+    } else {
+        document.getElementById('valueDistCard').style.display = 'none';
+        document.getElementById('previewBtn').disabled = true;
+        document.getElementById('applyBtn').disabled = true;
+    }
+});
+
+// 값 분포 로드
+function loadValueDistribution(datasetId, variable) {
+    fetch(`/api/variable-values/${datasetId}/${variable}/`)
+        .then(response => response.json())
+        .then(data => {
+            const container = document.getElementById('valueDistribution');
+            container.innerHTML = '';
+            
+            if (data.has_labels) {
+                container.innerHTML += '<small class="text-success mb-2 d-block"><i class="bi bi-check-circle"></i> 코드북 레이블 적용됨</small>';
+            }
+            
+            data.values.forEach(item => {
+                const displayText = item.label ? 
+                    `<strong>${item.value}</strong>: ${item.label}` : 
+                    `<strong>${item.value}</strong>`;
+                
+                container.innerHTML += `
+                    <div class="d-flex justify-content-between border-bottom py-2">
+                        <span>${displayText}</span>
+                        <span class="text-muted">${item.count} (${item.percentage}%)</span>
+                    </div>
+                `;
+            });
+            
+            document.getElementById('valueDistCard').style.display = 'block';
+        })
+        .catch(error => {
+            console.error('Error loading value distribution:', error);
+        });
+}
+
+// 규칙 추가
+document.getElementById('addRuleBtn').addEventListener('click', function() {
+    addRule();
+});
+
+function addRule(ruleData = null) {
+    ruleCounter++;
+    const ruleId = `rule_${ruleCounter}`;
+    
+    const ruleHtml = `
+        <div class="rule-item" id="${ruleId}">
+            <div class="form-row">
+                <select class="form-select rule-type" name="rule_type">
+                    <option value="single" ${ruleData && ruleData.type === 'single' ? 'selected' : ''}>단일값</option>
+                    <option value="range" ${ruleData && ruleData.type === 'range' ? 'selected' : ''}>범위</option>
+                    <option value="condition" ${ruleData && ruleData.type === 'condition' ? 'selected' : ''}>조건</option>
+                </select>
+                <button type="button" class="btn btn-sm btn-danger remove-rule-btn">
+                    <i class="bi bi-x"></i>
+                </button>
+            </div>
+            <div class="rule-inputs">
+                <!-- 규칙 타입별 입력 필드 -->
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('rules-container').insertAdjacentHTML('beforeend', ruleHtml);
+    
+    // 규칙 타입 변경 이벤트
+    const ruleElement = document.getElementById(ruleId);
+    const typeSelect = ruleElement.querySelector('.rule-type');
+    
+    typeSelect.addEventListener('change', function() {
+        updateRuleInputs(ruleId, this.value);
+    });
+    
+    // 초기 입력 필드 생성
+    updateRuleInputs(ruleId, typeSelect.value, ruleData);
+    
+    // 삭제 버튼
+    ruleElement.querySelector('.remove-rule-btn').addEventListener('click', function() {
+        ruleElement.remove();
+    });
+}
+
+function updateRuleInputs(ruleId, ruleType, ruleData = null) {
+    const ruleElement = document.getElementById(ruleId);
+    const inputsContainer = ruleElement.querySelector('.rule-inputs');
+    
+    let html = '';
+    
+    if (ruleType === 'single') {
+        html = `
+            <div class="form-row">
+                <input type="text" class="form-control" placeholder="기존 값 (예: 1)" 
+                       name="old_value" value="${ruleData?.old || ''}" required style="flex: 1;">
+                <span style="flex: 0 0 auto;">→</span>
+                <input type="text" class="form-control" placeholder="새 값 (예: 남성)" 
+                       name="new_value" value="${ruleData?.new || ''}" required style="flex: 1;">
+                <input type="text" class="form-control" placeholder="값 레이블 (선택)" 
+                       name="value_label" value="${ruleData?.label || ''}" style="flex: 1;">
+            </div>
+            <small class="form-text text-muted">값 레이블: 통계 분석 시 표시될 이름 (예: 1→"남성"→"남성" 또는 "Male")</small>
+        `;
+    } else if (ruleType === 'range') {
+        html = `
+            <div class="form-row">
+                <input type="number" class="form-control" placeholder="최소값" 
+                       name="min_value" value="${ruleData?.min || ''}" required style="flex: 1;">
+                <span style="flex: 0 0 auto;">~</span>
+                <input type="number" class="form-control" placeholder="최대값" 
+                       name="max_value" value="${ruleData?.max || ''}" required style="flex: 1;">
+                <span style="flex: 0 0 auto;">→</span>
+                <input type="text" class="form-control" placeholder="새 값" 
+                       name="new_value" value="${ruleData?.new || ''}" required style="flex: 1;">
+                <input type="text" class="form-control" placeholder="값 레이블 (선택)" 
+                       name="value_label" value="${ruleData?.label || ''}" style="flex: 1;">
+            </div>
+            <small class="form-text text-muted">값 레이블: 통계 분석 시 표시될 이름 (예: "20대", "청년층")</small>
+        `;
+    } else if (ruleType === 'condition') {
+        html = `
+            <div class="form-row">
+                <select class="form-select" name="operator" style="flex: 0 0 100px;">
+                    <option value=">=" ${ruleData?.operator === '>=' ? 'selected' : ''}>>=</option>
+                    <option value=">" ${ruleData?.operator === '>' ? 'selected' : ''}>&gt;</option>
+                    <option value="<=" ${ruleData?.operator === '<=' ? 'selected' : ''}><=</option>
+                    <option value="<" ${ruleData?.operator === '<' ? 'selected' : ''}>&lt;</option>
+                    <option value="==" ${ruleData?.operator === '==' ? 'selected' : ''}>=</option>
+                    <option value="!=" ${ruleData?.operator === '!=' ? 'selected' : ''}>!=</option>
+                </select>
+                <input type="number" class="form-control" placeholder="값" 
+                       name="condition_value" value="${ruleData?.value || ''}" required style="flex: 1;">
+                <span style="flex: 0 0 auto;">→</span>
+                <input type="text" class="form-control" placeholder="새 값" 
+                       name="new_value" value="${ruleData?.new || ''}" required style="flex: 1;">
+                <input type="text" class="form-control" placeholder="값 레이블 (선택)" 
+                       name="value_label" value="${ruleData?.label || ''}" style="flex: 1;">
+            </div>
+            <small class="form-text text-muted">값 레이블: 통계 분석 시 표시될 이름 (예: "합격", "불합격")</small>
+        `;
+    }
+    
+    inputsContainer.innerHTML = html;
+}
+
+// 규칙 수집
+function collectRules() {
+    const rules = [];
+    const ruleItems = document.querySelectorAll('.rule-item');
+    
+    ruleItems.forEach(item => {
+        const type = item.querySelector('.rule-type').value;
+        const rule = { type: type };
+        
+        // 값 레이블 (공통)
+        const valueLabelInput = item.querySelector('[name="value_label"]');
+        const valueLabel = valueLabelInput ? valueLabelInput.value.trim() : '';
+        
+        if (type === 'single') {
+            rule.old = item.querySelector('[name="old_value"]').value;
+            rule.new = item.querySelector('[name="new_value"]').value;
+            if (valueLabel) rule.label = valueLabel;
+        } else if (type === 'range') {
+            rule.min = item.querySelector('[name="min_value"]').value;
+            rule.max = item.querySelector('[name="max_value"]').value;
+            rule.new = item.querySelector('[name="new_value"]').value;
+            if (valueLabel) rule.label = valueLabel;
+        } else if (type === 'condition') {
+            rule.operator = item.querySelector('[name="operator"]').value;
+            rule.value = item.querySelector('[name="condition_value"]').value;
+            rule.new = item.querySelector('[name="new_value"]').value;
+            if (valueLabel) rule.label = valueLabel;
+        }
+        
+        rules.push(rule);
+    });
+    
+    return rules;
+}
+
+// 미리보기
+document.getElementById('previewBtn').addEventListener('click', function() {
+    const rules = collectRules();
+    
+    if (rules.length === 0) {
+        alert('변환 규칙을 추가해주세요.');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+    formData.append('dataset_id', currentDatasetId);
+    formData.append('source_variable', currentVariable);
+    formData.append('rules', JSON.stringify(rules));
+    
+    fetch('/recode/preview/', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showPreview(data);
+        } else {
+            alert('미리보기 실패: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('미리보기 중 오류가 발생했습니다.');
+    });
+});
+
+function showPreview(data) {
+    const tbody = document.getElementById('previewTableBody');
+    tbody.innerHTML = '';
+    
+    data.preview.forEach(item => {
+        const rowClass = item.changed ? 'changed-row' : '';
+        const percentage = (item.count / data.total * 100).toFixed(1);
+        
+        tbody.innerHTML += `
+            <tr class="${rowClass}">
+                <td>${item.original}</td>
+                <td><strong>${item.new}</strong></td>
+                <td>${item.count}</td>
+                <td>${percentage}%</td>
+            </tr>
+        `;
+    });
+    
+    // 새 값별 빈도
+    const newValueCounts = document.getElementById('newValueCounts');
+    newValueCounts.innerHTML = '';
+    
+    for (const [value, count] of Object.entries(data.new_value_counts)) {
+        const percentage = (count / data.total * 100).toFixed(1);
+        newValueCounts.innerHTML += `
+            <div class="d-flex justify-content-between border-bottom py-1">
+                <span><strong>${value}</strong></span>
+                <span class="text-muted">${count} (${percentage}%)</span>
+            </div>
+        `;
+    }
+    
+    const modal = new bootstrap.Modal(document.getElementById('previewModal'));
+    modal.show();
+}
+
+// 저장 및 적용
+document.getElementById('recodeForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const rules = collectRules();
+    
+    if (rules.length === 0) {
+        alert('변환 규칙을 추가해주세요.');
+        return;
+    }
+    
+    const formData = new FormData(this);
+    formData.append('rules', JSON.stringify(rules));
+    
+    // 변수 레이블 추가
+    const variableLabel = document.getElementById('variable_label').value.trim();
+    if (variableLabel) {
+        formData.append('variable_label', variableLabel);
+    }
+    
+    fetch('/recode/apply/', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('저장 실패: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('저장 중 오류가 발생했습니다.');
+    });
+});
+
+// 초기화
+document.getElementById('resetBtn').addEventListener('click', function() {
+    if (confirm('입력한 내용을 모두 초기화하시겠습니까?')) {
+        document.getElementById('recodeForm').reset();
+        document.getElementById('rules-container').innerHTML = '';
+        ruleCounter = 0;
+    }
+});
+
+// 기존 규칙 삭제
+document.querySelectorAll('.delete-rule-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const ruleId = this.getAttribute('data-rule-id');
+        
+        if (confirm('이 규칙을 삭제하시겠습니까?')) {
+            fetch(`/recode/delete/${ruleId}/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message);
+                    location.reload();
+                } else {
+                    alert('삭제 실패: ' + data.error);
+                }
+            });
+        }
+    });
+});
+</script>
+{% endblock %}

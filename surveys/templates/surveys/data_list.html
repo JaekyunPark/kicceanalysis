@@ -1,0 +1,48 @@
+{% extends 'surveys/base.html' %}
+
+{% block title %}데이터 목록{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>데이터 목록</h2>
+    <a href="{% url 'surveys:data_upload' %}" class="btn btn-primary">
+        <i class="bi bi-plus-circle"></i> 새 데이터 업로드
+    </a>
+</div>
+
+{% if datasets %}
+<div class="table-responsive">
+    <table class="table table-striped table-hover">
+        <thead>
+            <tr>
+                <th>이름</th>
+                <th>설명</th>
+                <th>업로드 날짜</th>
+                <th>작업</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for dataset in datasets %}
+            <tr>
+                <td><strong>{{ dataset.name }}</strong></td>
+                <td>{{ dataset.description|truncatewords:10 }}</td>
+                <td>{{ dataset.uploaded_at|date:"Y-m-d H:i" }}</td>
+                <td>
+                    <a href="{{ dataset.file.url }}" class="btn btn-sm btn-info" download>
+                        <i class="bi bi-download"></i> 다운로드
+                    </a>
+                    <a href="{% url 'surveys:data_delete' dataset.pk %}" class="btn btn-sm btn-danger">
+                        <i class="bi bi-trash"></i> 삭제
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="alert alert-info">
+    업로드된 데이터가 없습니다. <a href="{% url 'surveys:data_upload' %}">데이터를 업로드</a>하세요.
+</div>
+{% endif %}
+{% endblock %}

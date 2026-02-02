@@ -1,0 +1,30 @@
+{% extends 'surveys/base.html' %}
+
+{% block title %}데이터 삭제 확인{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-danger text-white">
+                <h4>데이터 삭제 확인</h4>
+            </div>
+            <div class="card-body">
+                <p>다음 데이터를 정말 삭제하시겠습니까?</p>
+                <div class="alert alert-warning">
+                    <strong>{{ dataset.name }}</strong>
+                </div>
+                <p class="text-danger"><strong>주의: 이 작업은 되돌릴 수 없습니다.</strong></p>
+                
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-danger">삭제</button>
+                        <a href="{% url 'surveys:data_list' %}" class="btn btn-secondary">취소</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

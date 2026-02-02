@@ -1,0 +1,945 @@
+{% extends 'surveys/base.html' %}
+{% load static %}
+
+{% block title %}통계 분석{% endblock %}
+
+{% block extra_css %}
+<style>
+    .dual-pane-container {
+        display: flex;
+        gap: 15px;
+        margin-bottom: 20px;
+    }
+
+    .variable-pane {
+        flex: 1;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        padding: 15px;
+        background-color: #f8f9fa;
+    }
+
+    .variable-list {
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        padding: 10px;
+        min-height: 300px;
+        max-height: 400px;
+        overflow-y: auto;
+        background-color: white;
+    }
+
+    .variable-item {
+        padding: 8px 12px;
+        margin-bottom: 5px;
+        background-color: #fff;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .variable-item:hover {
+        background-color: #e9ecef;
+        border-color: #adb5bd;
+    }
+
+    .variable-item.selected {
+        background-color: #0d6efd;
+        color: white;
+        border-color: #0d6efd;
+    }
+
+    .control-buttons {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        justify-content: center;
+        padding: 20px 10px;
+    }
+
+    .selected-pane {
+        flex: 1;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        padding: 15px;
+        background-color: #fff3cd;
+    }
+
+    .order-controls {
+        display: flex;
+        gap: 5px;
+        margin-bottom: 10px;
+    }
+
+    .col-variable-config {
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        padding: 12px;
+        margin-bottom: 10px;
+        background-color: white;
+    }
+
+    .col-variable-config.selected {
+        border-color: #0d6efd;
+        border-width: 2px;
+        background-color: #e7f1ff;
+    }
+
+    .col-variable-header {
+        font-weight: bold;
+        margin-bottom: 8px;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .statistics-options {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 8px;
+        padding: 8px;
+        background-color: #f8f9fa;
+        border-radius: 4px;
+    }
+
+    .stat-checkbox {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+
+    .stat-group {
+        padding: 8px 12px;
+        background-color: white;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+    }
+
+    .stat-group-title {
+        font-size: 0.85rem;
+        font-weight: bold;
+        color: #495057;
+        margin-bottom: 5px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>통계 분석 (Statistical Analysis)</h2>
+    <p class="text-muted">교차분석, 빈도분석, 평균분석을 통합하여 수행합니다</p>
+
+    <form method="post" id="analysisForm">
+        {% csrf_token %}
+
+        <!-- 데이터 및 코드북 선택 -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>1. 데이터 및 코드북 선택</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label for="dataset" class="form-label">데이터 선택 *</label>
+                        <select class="form-select" id="dataset" name="dataset" required>
+                            <option value="">데이터를 선택하세요</option>
+                            {% for data in datasets %}
+                            <option value="{{ data.id }}">{{ data.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label for="codebook" class="form-label">코드북 선택</label>
+                        <select class="form-select" id="codebook" name="codebook">
+                            <option value="">먼저 데이터를 선택하세요</option>
+                        </select>
+                        <small class="text-muted">선택사항: 코드북 미선택 시 원본 변수명 표시</small>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label for="weight_variable" class="form-label">가중치 변수 (Optional)</label>
+                        <select class="form-select" id="weight_variable" name="weight_variable">
+                            <option value="">가중치 없음</option>
+                        </select>
+                        <small class="text-muted">선택 시 모든 분석에 가중치가 적용됩니다</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 변수 선택 -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>2. 변수 선택</h5>
+            </div>
+            <div class="card-body">
+                <!-- 행 변수 선택 -->
+                <div class="mb-4">
+                    <h6>행 변수 (Row Variables)</h6>
+                    <div class="dual-pane-container">
+                        <div class="variable-pane">
+                            <label class="form-label">사용 가능한 변수</label>
+                            <div id="availableRowVars" class="variable-list">
+                                <p class="text-muted text-center mt-5">데이터를 선택하면 변수 목록이 표시됩니다</p>
+                            </div>
+                        </div>
+
+                        <div class="control-buttons">
+                            <button type="button" class="btn btn-primary" onclick="addRowVariable()">
+                                추가 →
+                            </button>
+                            <button type="button" class="btn btn-secondary" onclick="removeRowVariable()">
+                                ← 제거
+                            </button>
+                        </div>
+
+                        <div class="selected-pane">
+                            <label class="form-label">선택된 행 변수</label>
+                            <div class="order-controls">
+                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="moveRowUp()">↑
+                                    위로</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="moveRowDown()">↓
+                                    아래로</button>
+                            </div>
+                            <div id="selectedRowVars" class="variable-list">
+                                <!-- 선택된 변수들이 여기에 표시됩니다 -->
+                            </div>
+                            <input type="hidden" id="rowVarsInput" name="row_variables">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 열 변수 선택 및 통계량 옵션 -->
+                <div class="mb-4">
+                    <h6>열 변수 (Column Variables) 및 통계량 선택</h6>
+                    <div class="dual-pane-container">
+                        <div class="variable-pane">
+                            <label class="form-label">사용 가능한 변수</label>
+                            <div id="availableColVars" class="variable-list">
+                                <p class="text-muted text-center mt-5">데이터를 선택하면 변수 목록이 표시됩니다</p>
+                            </div>
+                        </div>
+
+                        <div class="control-buttons">
+                            <button type="button" class="btn btn-primary" onclick="addColVariable()">
+                                추가 →
+                            </button>
+                            <button type="button" class="btn btn-secondary" onclick="removeColVariable()">
+                                ← 제거
+                            </button>
+                        </div>
+
+                        <div class="selected-pane" style="flex: 1.5;">
+                            <label class="form-label">선택된 열 변수 및 통계량 옵션</label>
+                            <div class="order-controls">
+                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="moveColUp()">↑
+                                    위로</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="moveColDown()">↓
+                                    아래로</button>
+                            </div>
+                            <div id="selectedColVarsConfig" class="variable-list" style="min-height: 350px;">
+                                <!-- 선택된 변수들과 통계량 옵션이 여기에 표시됩니다 -->
+                            </div>
+                            <input type="hidden" id="colVarsInput" name="col_variables">
+                            <input type="hidden" id="colStatsInput" name="col_statistics">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 전역 분석 옵션 -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>3. 전역 옵션</h5>
+            </div>
+            <div class="card-body">
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="showTotal" name="show_total">
+                    <label class="form-check-label" for="showTotal">
+                        전체(Total) 행/열 표시
+                    </label>
+                </div>
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="autoTest" name="auto_test" checked>
+                    <label class="form-check-label" for="autoTest">
+                        통계 검정 자동 수행 (카이제곱, t-test, ANOVA)
+                    </label>
+                </div>
+
+                <!-- 표시 형식 옵션 -->
+                <div class="ms-4 mb-3" style="border-left: 3px solid #28a745; padding-left: 15px;">
+                    <small class="text-muted d-block mb-2"><strong>표시 형식:</strong></small>
+
+                    <div class="row mb-2">
+                        <div class="col-md-6">
+                            <label class="form-label mb-1">
+                                <small>백분율(%) 기호 표시:</small>
+                            </label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="percent_symbol" id="percentSymbolYes"
+                                    value="yes">
+                                <label class="form-check-label" for="percentSymbolYes">
+                                    <small>표시 (예: 45.2%)</small>
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="percent_symbol" id="percentSymbolNo"
+                                    value="no" checked>
+                                <label class="form-check-label" for="percentSymbolNo">
+                                    <small>숨김 (예: 45.2)</small>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label for="meanDecimals" class="form-label mb-1">
+                                <small>평균값 소수점 자릿수:</small>
+                            </label>
+                            <select class="form-select form-select-sm" id="meanDecimals" name="mean_decimals">
+                                <option value="0">0자리 (예: 3)</option>
+                                <option value="1">1자리 (예: 3.5)</option>
+                                <option value="2" selected>2자리 (예: 3.45)</option>
+                                <option value="3">3자리 (예: 3.456)</option>
+                                <option value="4">4자리 (예: 3.4567)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 검정 통계량 표시 옵션 -->
+                <div class="ms-4 mb-3" id="testDisplayOptions"
+                    style="border-left: 3px solid #0d6efd; padding-left: 15px;">
+                    <small class="text-muted d-block mb-2"><strong>카이제곱 검정 (χ²) 표시 형식:</strong></small>
+
+                    <div class="row mb-2">
+                        <div class="col">
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input chi-option" type="checkbox" id="showChiLabel"
+                                    name="show_chi_label">
+                                <label class="form-check-label" for="showChiLabel">
+                                    <small>레이블 (χ² = )</small>
+                                </label>
+                            </div>
+
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input chi-option" type="checkbox" id="showChiValue"
+                                    name="show_chi_value" checked>
+                                <label class="form-check-label" for="showChiValue">
+                                    <small>χ² 값</small>
+                                </label>
+                            </div>
+
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input chi-option" type="checkbox" id="showChiDf"
+                                    name="show_chi_df" checked>
+                                <label class="form-check-label" for="showChiDf">
+                                    <small>자유도</small>
+                                </label>
+                            </div>
+
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input chi-option" type="checkbox" id="showChiStars"
+                                    name="show_chi_stars" checked>
+                                <label class="form-check-label" for="showChiStars">
+                                    <small>유의수준 (*, **, ***)</small>
+                                </label>
+                            </div>
+
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input chi-option" type="checkbox" id="showChiPvalue"
+                                    name="show_chi_pvalue">
+                                <label class="form-check-label" for="showChiPvalue">
+                                    <small>p-value</small>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <small class="text-muted">
+                            예시: <span id="chiFormatExample" class="fw-bold text-primary">275.088(5)***</span>
+                        </small>
+                    </div>
+
+                    <hr class="my-2">
+
+                    <small class="text-muted d-block mb-2"><strong>t-검정 / F-검정 (ANOVA) 표시 형식:</strong></small>
+
+                    <div class="row mb-2">
+                        <div class="col">
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input tf-option" type="checkbox" id="showTfLabel"
+                                    name="show_tf_label">
+                                <label class="form-check-label" for="showTfLabel">
+                                    <small>레이블 (t = , F = )</small>
+                                </label>
+                            </div>
+
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input tf-option" type="checkbox" id="showTfValue"
+                                    name="show_tf_value" checked>
+                                <label class="form-check-label" for="showTfValue">
+                                    <small>t/F 값</small>
+                                </label>
+                            </div>
+
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input tf-option" type="checkbox" id="showTfDf"
+                                    name="show_tf_df">
+                                <label class="form-check-label" for="showTfDf">
+                                    <small>자유도</small>
+                                </label>
+                            </div>
+
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input tf-option" type="checkbox" id="showTfStars"
+                                    name="show_tf_stars" checked>
+                                <label class="form-check-label" for="showTfStars">
+                                    <small>유의수준 (*, **, ***)</small>
+                                </label>
+                            </div>
+
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input tf-option" type="checkbox" id="showTfPvalue"
+                                    name="show_tf_pvalue">
+                                <label class="form-check-label" for="showTfPvalue">
+                                    <small>p-value</small>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-2">
+                        <small class="text-muted">
+                            예시: <span id="tfFormatExample" class="fw-bold text-success">15.100***</span>
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 실행 버튼 -->
+        <div class="d-grid gap-2 mb-4">
+            <button type="submit" class="btn btn-success btn-lg">분석 실행</button>
+        </div>
+    </form>
+</div>
+
+<script>
+    let variables = [];
+    let selectedRowVars = [];
+    let selectedColVars = [];
+    let colVarStats = {}; // 각 열 변수별 통계량 옵션 저장
+    let selectedColVar = null; // 현재 선택된 열 변수 (통계량 설정용)
+
+    // 데이터 선택 시 코드북 목록 로드
+    document.getElementById('dataset').addEventListener('change', function () {
+        const datasetId = this.value;
+        const codebookSelect = document.getElementById('codebook');
+
+        if (!datasetId) {
+            codebookSelect.innerHTML = '<option value="">먼저 데이터를 선택하세요</option>';
+            return;
+        }
+
+        // 코드북 목록 로드
+        fetch(`/analysis/get-codebooks/${datasetId}/`)
+            .then(response => response.json())
+            .then(data => {
+                codebookSelect.innerHTML = '<option value="">코드북 없이 진행</option>';
+                data.codebooks.forEach(cb => {
+                    const option = document.createElement('option');
+                    option.value = cb.id;
+                    option.textContent = cb.name;
+                    codebookSelect.appendChild(option);
+                });
+            })
+            .catch(error => {
+                console.error('Error loading codebooks:', error);
+                codebookSelect.innerHTML = '<option value="">코드북 로드 실패</option>';
+            });
+
+        // 변수 목록 로드
+        loadVariables(datasetId);
+    });
+
+    // 변수 목록 로드
+    function loadVariables(datasetId) {
+        fetch(`/analysis/get-variables/${datasetId}/`)
+            .then(response => response.json())
+            .then(data => {
+                variables = data.variables;
+
+                // 가중치 변수 옵션 채우기
+                const weightSelect = document.getElementById('weight_variable');
+                weightSelect.innerHTML = '<option value="">가중치 없음</option>';
+                variables.forEach(v => {
+                    const option = document.createElement('option');
+                    option.value = v;
+                    option.textContent = v;
+                    weightSelect.appendChild(option);
+                });
+
+                renderVariableLists();
+            })
+            .catch(error => {
+                console.error('Error loading variables:', error);
+                alert('변수 목록을 불러오는데 실패했습니다.');
+            });
+    }
+
+    // 변수 목록 렌더링
+    function renderVariableLists() {
+        const availableRowDiv = document.getElementById('availableRowVars');
+        const availableColDiv = document.getElementById('availableColVars');
+
+        // 이미 선택된 변수 제외
+        const usedVars = [...selectedRowVars, ...selectedColVars];
+        const availableVars = variables.filter(v => !usedVars.includes(v));
+
+        // 행 변수 사용 가능 목록
+        availableRowDiv.innerHTML = availableVars.map(v =>
+            `<div class="variable-item" onclick="selectAvailableRowVar('${v}', event)">${v}</div>`
+        ).join('');
+
+        // 열 변수 사용 가능 목록
+        availableColDiv.innerHTML = availableVars.map(v =>
+            `<div class="variable-item" onclick="selectAvailableColVar('${v}', event)">${v}</div>`
+        ).join('');
+
+        // 선택된 변수 목록
+        renderSelectedVars();
+    }
+
+    // 선택된 변수 렌더링
+    function renderSelectedVars() {
+        const selectedRowDiv = document.getElementById('selectedRowVars');
+        const selectedColDiv = document.getElementById('selectedColVarsConfig');
+
+        // 행 변수
+        selectedRowDiv.innerHTML = selectedRowVars.map(v =>
+            `<div class="variable-item" onclick="selectSelectedRowVar('${v}')">${v}</div>`
+        ).join('');
+
+        // 열 변수 및 통계량 옵션
+        selectedColDiv.innerHTML = selectedColVars.map((v, idx) => {
+            const isSelected = selectedColVar === v;
+            return `
+            <div class="col-variable-config ${isSelected ? 'selected' : ''}" onclick="selectColVarForConfig('${v}')">
+                <div class="col-variable-header">
+                    <span>${v}</span>
+                    <button type="button" class="btn btn-sm btn-outline-danger" 
+                            onclick="event.stopPropagation(); removeSpecificColVar('${v}')">✕</button>
+                </div>
+                <div class="statistics-options" onclick="event.stopPropagation()">
+                    <div class="stat-group">
+                        <div class="stat-group-title">빈도/백분율</div>
+                        <div class="stat-checkbox">
+                            <input type="checkbox" id="stat_${idx}_count" 
+                                   ${colVarStats[v]?.count ? 'checked' : ''}
+                                   onchange="updateColVarStat('${v}', 'count', this.checked)">
+                            <label for="stat_${idx}_count">빈도 (N)</label>
+                        </div>
+                        <div class="stat-checkbox">
+                            <input type="checkbox" id="stat_${idx}_row_pct" 
+                                   ${colVarStats[v]?.row_pct ? 'checked' : ''}
+                                   onchange="updateColVarStat('${v}', 'row_pct', this.checked)">
+                            <label for="stat_${idx}_row_pct">행 %</label>
+                        </div>
+                        <div class="stat-checkbox">
+                            <input type="checkbox" id="stat_${idx}_col_pct" 
+                                   ${colVarStats[v]?.col_pct ? 'checked' : ''}
+                                   onchange="updateColVarStat('${v}', 'col_pct', this.checked)">
+                            <label for="stat_${idx}_col_pct">열 %</label>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-group">
+                        <div class="stat-group-title">중심경향</div>
+                        <div class="stat-checkbox">
+                            <input type="checkbox" id="stat_${idx}_mean" 
+                                   ${colVarStats[v]?.mean ? 'checked' : ''}
+                                   onchange="updateColVarStat('${v}', 'mean', this.checked)">
+                            <label for="stat_${idx}_mean">평균</label>
+                        </div>
+                        <div class="stat-checkbox">
+                            <input type="checkbox" id="stat_${idx}_median" 
+                                   ${colVarStats[v]?.median ? 'checked' : ''}
+                                   onchange="updateColVarStat('${v}', 'median', this.checked)">
+                            <label for="stat_${idx}_median">중앙값</label>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-group">
+                        <div class="stat-group-title">산포도</div>
+                        <div class="stat-checkbox">
+                            <input type="checkbox" id="stat_${idx}_std" 
+                                   ${colVarStats[v]?.std ? 'checked' : ''}
+                                   onchange="updateColVarStat('${v}', 'std', this.checked)">
+                            <label for="stat_${idx}_std">표준편차</label>
+                        </div>
+                        <div class="stat-checkbox">
+                            <input type="checkbox" id="stat_${idx}_min" 
+                                   ${colVarStats[v]?.min ? 'checked' : ''}
+                                   onchange="updateColVarStat('${v}', 'min', this.checked)">
+                            <label for="stat_${idx}_min">최솟값</label>
+                        </div>
+                        <div class="stat-checkbox">
+                            <input type="checkbox" id="stat_${idx}_max" 
+                                   ${colVarStats[v]?.max ? 'checked' : ''}
+                                   onchange="updateColVarStat('${v}', 'max', this.checked)">
+                            <label for="stat_${idx}_max">최댓값</label>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-group">
+                        <div class="stat-group-title">4분위수</div>
+                        <div class="stat-checkbox">
+                            <input type="checkbox" id="stat_${idx}_q1" 
+                                   ${colVarStats[v]?.q1 ? 'checked' : ''}
+                                   onchange="updateColVarStat('${v}', 'q1', this.checked)">
+                            <label for="stat_${idx}_q1">Q1 (25%)</label>
+                        </div>
+                        <div class="stat-checkbox">
+                            <input type="checkbox" id="stat_${idx}_q3" 
+                                   ${colVarStats[v]?.q3 ? 'checked' : ''}
+                                   onchange="updateColVarStat('${v}', 'q3', this.checked)">
+                            <label for="stat_${idx}_q3">Q3 (75%)</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        }).join('');
+
+        // hidden input 업데이트
+        document.getElementById('rowVarsInput').value = selectedRowVars.join(',');
+        document.getElementById('colVarsInput').value = selectedColVars.join(',');
+        document.getElementById('colStatsInput').value = JSON.stringify(colVarStats);
+    }
+
+    // 열 변수 통계량 업데이트
+    function updateColVarStat(varName, statType, checked) {
+        if (!colVarStats[varName]) {
+            colVarStats[varName] = {};
+        }
+        colVarStats[varName][statType] = checked;
+        document.getElementById('colStatsInput').value = JSON.stringify(colVarStats);
+    }
+
+    // 열 변수 선택 (통계량 설정용)
+    function selectColVarForConfig(varName) {
+        selectedColVar = varName;
+        renderSelectedVars();
+    }
+
+    // 특정 열 변수 제거
+    function removeSpecificColVar(varName) {
+        selectedColVars = selectedColVars.filter(v => v !== varName);
+        delete colVarStats[varName];
+        if (selectedColVar === varName) {
+            selectedColVar = null;
+        }
+        renderVariableLists();
+    }
+
+    // 변수 선택 (사용 가능 목록에서)
+    let selectedAvailableRowVars = [];
+    let selectedAvailableColVars = [];
+    let lastRowVarIndex = -1;
+    let lastColVarIndex = -1;
+    let selectedSelectedRowVar = null;
+
+    function selectAvailableRowVar(varName, event) {
+        const availableRowDiv = document.getElementById('availableRowVars');
+        const items = Array.from(availableRowDiv.querySelectorAll('.variable-item'));
+        const contentList = items.map(el => el.textContent);
+        const index = contentList.indexOf(varName);
+
+        if (event.ctrlKey || event.metaKey) {
+            // Ctrl/Cmd 클릭: 토글
+            if (selectedAvailableRowVars.includes(varName)) {
+                selectedAvailableRowVars = selectedAvailableRowVars.filter(v => v !== varName);
+            } else {
+                selectedAvailableRowVars.push(varName);
+            }
+            lastRowVarIndex = index;
+        } else if (event.shiftKey && lastRowVarIndex !== -1) {
+            // Shift 클릭: 범위 선택
+            const start = Math.min(lastRowVarIndex, index);
+            const end = Math.max(lastRowVarIndex, index);
+
+            // 기존 선택 유지 여부는 UX 결정 사항이나 보통 Shift는 범위 추가/재설정
+            // 여기서는 단순 범위를 현재 선택에 추가하는 방식으로 구현할 수도 있고,
+            // 윈도우 탐색기처럼 범위를 재설정할 수도 있음.
+            // 여기서는 윈도우 탐색기 방식으로: Ctrl 없는 Shift는 범위 재설정
+            selectedAvailableRowVars = contentList.slice(start, end + 1);
+        } else {
+            // 일반 클릭: 단일 선택
+            selectedAvailableRowVars = [varName];
+            lastRowVarIndex = index;
+        }
+
+        // 비주얼 업데이트
+        items.forEach(el => {
+            el.classList.toggle('selected', selectedAvailableRowVars.includes(el.textContent));
+        });
+    }
+
+    function selectAvailableColVar(varName, event) {
+        const availableColDiv = document.getElementById('availableColVars');
+        const items = Array.from(availableColDiv.querySelectorAll('.variable-item'));
+        const contentList = items.map(el => el.textContent);
+        const index = contentList.indexOf(varName);
+
+        if (event.ctrlKey || event.metaKey) {
+            if (selectedAvailableColVars.includes(varName)) {
+                selectedAvailableColVars = selectedAvailableColVars.filter(v => v !== varName);
+            } else {
+                selectedAvailableColVars.push(varName);
+            }
+            lastColVarIndex = index;
+        } else if (event.shiftKey && lastColVarIndex !== -1) {
+            const start = Math.min(lastColVarIndex, index);
+            const end = Math.max(lastColVarIndex, index);
+            selectedAvailableColVars = contentList.slice(start, end + 1);
+        } else {
+            selectedAvailableColVars = [varName];
+            lastColVarIndex = index;
+        }
+
+        items.forEach(el => {
+            el.classList.toggle('selected', selectedAvailableColVars.includes(el.textContent));
+        });
+    }
+
+    function selectSelectedRowVar(varName) {
+        selectedSelectedRowVar = varName;
+        document.querySelectorAll('#selectedRowVars .variable-item').forEach(el => {
+            el.classList.toggle('selected', el.textContent === varName);
+        });
+    }
+
+    // 행 변수 추가/제거
+    function addRowVariable() {
+        if (selectedAvailableRowVars.length > 0) {
+            let added = false;
+            selectedAvailableRowVars.forEach(v => {
+                if (!selectedRowVars.includes(v)) {
+                    selectedRowVars.push(v);
+                    added = true;
+                }
+            });
+
+            if (added) {
+                selectedAvailableRowVars = [];
+                lastRowVarIndex = -1;
+                renderVariableLists();
+            }
+        }
+    }
+
+    function removeRowVariable() {
+        if (selectedSelectedRowVar) {
+            selectedRowVars = selectedRowVars.filter(v => v !== selectedSelectedRowVar);
+            selectedSelectedRowVar = null;
+            renderVariableLists();
+        }
+    }
+
+    // 열 변수 추가/제거
+    function addColVariable() {
+        if (selectedAvailableColVars.length > 0) {
+            let added = false;
+            selectedAvailableColVars.forEach(v => {
+                if (!selectedColVars.includes(v)) {
+                    selectedColVars.push(v);
+                    // 기본 통계량 설정 (행%)
+                    colVarStats[v] = { row_pct: true };
+                    added = true;
+                }
+            });
+
+            if (added) {
+                selectedAvailableColVars = [];
+                lastColVarIndex = -1;
+                renderVariableLists();
+            }
+        }
+    }
+
+    function removeColVariable() {
+        if (selectedColVar) {
+            selectedColVars = selectedColVars.filter(v => v !== selectedColVar);
+            delete colVarStats[selectedColVar];
+            selectedColVar = null;
+            renderVariableLists();
+        }
+    }
+
+    // 순서 변경
+    function moveRowUp() {
+        if (selectedSelectedRowVar) {
+            const index = selectedRowVars.indexOf(selectedSelectedRowVar);
+            if (index > 0) {
+                [selectedRowVars[index], selectedRowVars[index - 1]] =
+                    [selectedRowVars[index - 1], selectedRowVars[index]];
+                renderSelectedVars();
+            }
+        }
+    }
+
+    function moveRowDown() {
+        if (selectedSelectedRowVar) {
+            const index = selectedRowVars.indexOf(selectedSelectedRowVar);
+            if (index < selectedRowVars.length - 1) {
+                [selectedRowVars[index], selectedRowVars[index + 1]] =
+                    [selectedRowVars[index + 1], selectedRowVars[index]];
+                renderSelectedVars();
+            }
+        }
+    }
+
+    function moveColUp() {
+        if (selectedColVar) {
+            const index = selectedColVars.indexOf(selectedColVar);
+            if (index > 0) {
+                [selectedColVars[index], selectedColVars[index - 1]] =
+                    [selectedColVars[index - 1], selectedColVars[index]];
+                renderSelectedVars();
+            }
+        }
+    }
+
+    function moveColDown() {
+        if (selectedColVar) {
+            const index = selectedColVars.indexOf(selectedColVar);
+            if (index < selectedColVars.length - 1) {
+                [selectedColVars[index], selectedColVars[index + 1]] =
+                    [selectedColVars[index + 1], selectedColVars[index]];
+                renderSelectedVars();
+            }
+        }
+    }
+
+    // 폼 제출 검증
+    document.getElementById('analysisForm').addEventListener('submit', function (e) {
+        if (selectedRowVars.length === 0 || selectedColVars.length === 0) {
+            e.preventDefault();
+            alert('행 변수와 열 변수를 각각 최소 1개 이상 선택해주세요.');
+            return;
+        }
+
+        // 각 열 변수에 최소 1개 이상의 통계량이 선택되었는지 확인
+        for (let colVar of selectedColVars) {
+            const stats = colVarStats[colVar];
+            if (!stats || Object.values(stats).every(v => !v)) {
+                e.preventDefault();
+                alert(`"${colVar}" 변수에 대해 최소 1개 이상의 통계량을 선택해주세요.`);
+                return;
+            }
+        }
+    });
+
+    // 검정 통계량 표시 형식 예시 업데이트
+    function updateChiFormatExample() {
+        const showLabel = document.getElementById('showChiLabel').checked;
+        const showValue = document.getElementById('showChiValue').checked;
+        const showDf = document.getElementById('showChiDf').checked;
+        const showStars = document.getElementById('showChiStars').checked;
+        const showPvalue = document.getElementById('showChiPvalue').checked;
+
+        let example = '';
+
+        if (showLabel) {
+            example += 'χ² = ';
+        }
+
+        if (showValue) {
+            example += '275.088';
+        }
+
+        if (showDf) {
+            example += '(5)';
+        }
+
+        if (showStars) {
+            example += '***';
+        }
+
+        if (showPvalue) {
+            example += '(0.000)';
+        }
+
+        if (!example) {
+            example = '(표시 안 함)';
+        }
+
+        document.getElementById('chiFormatExample').textContent = example;
+    }
+
+    function updateTfFormatExample() {
+        const showLabel = document.getElementById('showTfLabel').checked;
+        const showValue = document.getElementById('showTfValue').checked;
+        const showDf = document.getElementById('showTfDf').checked;
+        const showStars = document.getElementById('showTfStars').checked;
+        const showPvalue = document.getElementById('showTfPvalue').checked;
+
+        let example = '';
+
+        if (showLabel) {
+            example += 't = ';
+        }
+
+        if (showValue) {
+            example += '15.100';
+        }
+
+        if (showDf) {
+            example += '(2580)';
+        }
+
+        if (showStars) {
+            example += '***';
+        }
+
+        if (showPvalue) {
+            example += '(0.000)';
+        }
+
+        if (!example) {
+            example = '(표시 안 함)';
+        }
+
+        document.getElementById('tfFormatExample').textContent = example;
+    }
+
+    // 체크박스 이벤트 리스너
+    document.getElementById('showChiLabel').addEventListener('change', updateChiFormatExample);
+    document.getElementById('showChiValue').addEventListener('change', updateChiFormatExample);
+    document.getElementById('showChiDf').addEventListener('change', updateChiFormatExample);
+    document.getElementById('showChiStars').addEventListener('change', updateChiFormatExample);
+    document.getElementById('showChiPvalue').addEventListener('change', updateChiFormatExample);
+
+    document.getElementById('showTfLabel').addEventListener('change', updateTfFormatExample);
+    document.getElementById('showTfValue').addEventListener('change', updateTfFormatExample);
+    document.getElementById('showTfDf').addEventListener('change', updateTfFormatExample);
+    document.getElementById('showTfStars').addEventListener('change', updateTfFormatExample);
+    document.getElementById('showTfPvalue').addEventListener('change', updateTfFormatExample);
+
+    // 자동 검정 체크박스에 따라 표시 옵션 활성화/비활성화
+    document.getElementById('autoTest').addEventListener('change', function () {
+        const optionsDiv = document.getElementById('testDisplayOptions');
+        if (this.checked) {
+            optionsDiv.style.opacity = '1';
+            optionsDiv.querySelectorAll('input').forEach(input => input.disabled = false);
+        } else {
+            optionsDiv.style.opacity = '0.5';
+            optionsDiv.querySelectorAll('input').forEach(input => input.disabled = true);
+        }
+    });
+</script>
+{% endblock %}

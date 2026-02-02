@@ -1,0 +1,33 @@
+{% extends 'surveys/base.html' %}
+
+{% block title %}코드북 삭제 확인{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-danger text-white">
+                <h4>코드북 삭제 확인</h4>
+            </div>
+            <div class="card-body">
+                <p>다음 코드북을 정말 삭제하시겠습니까?</p>
+                <div class="alert alert-warning">
+                    <strong>{{ codebook.name }}</strong>
+                    {% if codebook.dataset %}
+                    <br><small>연결된 데이터셋: {{ codebook.dataset.name }}</small>
+                    {% endif %}
+                </div>
+                <p class="text-danger"><strong>주의: 이 작업은 되돌릴 수 없습니다.</strong></p>
+                
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-danger">삭제</button>
+                        <a href="{% url 'surveys:codebook_list' %}" class="btn btn-secondary">취소</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

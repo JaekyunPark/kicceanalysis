@@ -1,0 +1,63 @@
+{% extends 'surveys/base.html' %}
+
+{% block title %}코드북 업로드{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h4>코드북 업로드</h4>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <strong>코드북 형식:</strong> Excel 파일에 Variable, Variable Label, Value, Value Label 컬럼이 필요합니다.
+                </div>
+                
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.name.id_for_label }}" class="form-label">코드북 이름 *</label>
+                        {{ form.name }}
+                        {% if form.name.errors %}
+                        <div class="text-danger">{{ form.name.errors }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.dataset.id_for_label }}" class="form-label">연결할 데이터셋</label>
+                        {{ form.dataset }}
+                        <small class="text-muted d-block mt-1">선택사항: 특정 데이터셋과 연결하거나 범용으로 사용할 수 있습니다.</small>
+                        {% if form.dataset.errors %}
+                        <div class="text-danger">{{ form.dataset.errors }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.file.id_for_label }}" class="form-label">파일 선택 (Excel) *</label>
+                        {{ form.file }}
+                        <small class="text-muted d-block mt-1">지원 형식: .xlsx, .xls</small>
+                        {% if form.file.errors %}
+                        <div class="text-danger">{{ form.file.errors }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.description.id_for_label }}" class="form-label">설명</label>
+                        {{ form.description }}
+                        {% if form.description.errors %}
+                        <div class="text-danger">{{ form.description.errors }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary">업로드</button>
+                        <a href="{% url 'surveys:codebook_list' %}" class="btn btn-secondary">취소</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
