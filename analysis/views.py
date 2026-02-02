@@ -6,6 +6,8 @@ import pandas as pd
 import numpy as np
 from scipy import stats
 import json
+from django.core.serializers.json import DjangoJSONEncoder
+from .models import AnalysisPreset
 try:
     import pyreadstat
 except ImportError:
@@ -81,6 +83,14 @@ def unified_analysis(request):
     """통합 분석 메인 페이지"""
     datasets = SurveyData.objects.filter(user=request.user)
     
+    # GET 파라미터로 dataset_id가 넘어오면 미리 선택
+    selected_dataset_id = request.GET.get('dataset_id')
+    try:
+        if selected_dataset_id:
+            selected_dataset_id = int(selected_dataset_id)
+    except (ValueError, TypeError):
+        selected_dataset_id = None
+
     if request.method == 'POST':
         dataset_id = request.POST.get('dataset')
         codebook_id = request.POST.get('codebook')
@@ -96,7 +106,8 @@ def unified_analysis(request):
         if not dataset_id or not row_variables or not col_variables:
             return render(request, 'analysis/unified_analysis.html', {
                 'datasets': datasets,
-                'error': '필수 항목을 모두 입력해주세요.'
+                'error': '필수 항목을 모두 입력해주세요.',
+                'selected_dataset_id': int(dataset_id) if dataset_id else None
             })
         
         # 분석 수행
@@ -155,7 +166,8 @@ def unified_analysis(request):
         })
     
     return render(request, 'analysis/unified_analysis.html', {
-        'datasets': datasets
+        'datasets': datasets,
+        'selected_dataset_id': selected_dataset_id
     })
 
 def perform_unified_analysis(dataset_id, codebook_id, row_variables, col_variables, 
@@ -1420,6 +1432,75 @@ def get_codebooks_for_dataset(request, dataset_id):
     
     return JsonResponse({
         'codebooks': list(codebooks)
+    })
+
+@login_required
+def save_analysis_preset(request):
+    """분석 프리셋 저장"""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=400)
+    
+    try:
+        dataset_id = request.POST.get('dataset_id')
+        name = request.POST.get('name')
+        config_json = request.POST.get('configuration')
+        
+        if not dataset_id or not name or not config_json:
+            return JsonResponse({'error': 'Missing required fields'}, status=400)
+            
+        dataset = get_object_or_404(SurveyData, id=dataset_id, user=request.user)
+        configuration = json.loads(config_json)
+        
+        preset = AnalysisPreset.objects.create(
+            user=request.user,
+            dataset=dataset,
+            name=name,
+            configuration=configuration
+        )
+        
+        return JsonResponse({
+            'success': True,
+            'preset_id': preset.id,
+            'message': '프리셋이 저장되었습니다.'
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@login_required
+def get_analysis_presets(request, dataset_id):
+    """특정 데이터셋의 프리셋 목록 조회"""
+    dataset = get_object_or_404(SurveyData, id=dataset_id, user=request.user)
+    
+    presets = AnalysisPreset.objects.filter(
+        user=request.user, 
+        dataset=dataset
+    ).values('id', 'name', 'created_at')
+    
+    return JsonResponse({
+        'presets': list(presets)
+    }, encoder=DjangoJSONEncoder)
+
+@login_required
+def load_analysis_preset(request, preset_id):
+    """프리셋 설정 로드"""
+    preset = get_object_or_404(AnalysisPreset, id=preset_id, user=request.user)
+    
+    return JsonResponse({
+        'configuration': preset.configuration
+    })
+
+@login_required
+def delete_analysis_preset(request, preset_id):
+    """프리셋 삭제"""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=400)
+        
+    preset = get_object_or_404(AnalysisPreset, id=preset_id, user=request.user)
+    preset.delete()
+    
+    return JsonResponse({
+        'success': True,
+        'message': '프리셋이 삭제되었습니다.'
     })
 
 @login_required

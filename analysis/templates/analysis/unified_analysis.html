@@ -129,8 +129,21 @@
 
 {% block content %}
 <div class="container mt-4">
-    <h2>통계 분석 (Statistical Analysis)</h2>
-    <p class="text-muted">교차분석, 빈도분석, 평균분석을 통합하여 수행합니다</p>
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h2>통계 분석 (Statistical Analysis)</h2>
+            <p class="text-muted mb-0">교차분석, 빈도분석, 평균분석을 통합하여 수행합니다</p>
+        </div>
+        <div class="d-flex gap-2">
+            <select class="form-select" id="presetSelect" style="width: 250px;">
+                <option value="">프리셋 선택...</option>
+            </select>
+            <button type="button" class="btn btn-outline-primary" id="btnLoadPreset"
+                onclick="loadSelectedPreset()">불러오기</button>
+            <button type="button" class="btn btn-outline-danger" id="btnDeletePreset"
+                onclick="deleteSelectedPreset()">삭제</button>
+        </div>
+    </div>
 
     <form method="post" id="analysisForm">
         {% csrf_token %}
@@ -147,7 +160,7 @@
                         <select class="form-select" id="dataset" name="dataset" required>
                             <option value="">데이터를 선택하세요</option>
                             {% for data in datasets %}
-                            <option value="{{ data.id }}">{{ data.name }}</option>
+                            <option value="{{ data.id }}" {% if data.id == selected_dataset_id %}selected{% endif %}>{{ data.name }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -422,10 +435,34 @@
         </div>
 
         <!-- 실행 버튼 -->
-        <div class="d-grid gap-2 mb-4">
+        <div class="d-grid gap-2 mb-4 d-md-flex justify-content-md-end">
+            <button type="button" class="btn btn-outline-secondary me-md-2" onclick="showSavePresetModal()">설정 저장
+                (Preset)</button>
             <button type="submit" class="btn btn-success btn-lg">분석 실행</button>
         </div>
     </form>
+</div>
+
+<!-- 프리셋 저장 모달 -->
+<div class="modal fade" id="savePresetModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">분석 설정 저장</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="presetName" class="form-label">프리셋 이름</label>
+                    <input type="text" class="form-control" id="presetName" placeholder="예: 만족도 분석 세트 1">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
+                <button type="button" class="btn btn-primary" onclick="saveContextPreset()">저장</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -464,7 +501,251 @@
 
         // 변수 목록 로드
         loadVariables(datasetId);
+
+        // 프리셋 목록 로드
+        loadPresetsForDataset(datasetId);
     });
+
+    // 프리셋 목록 로드 함수
+    function loadPresetsForDataset(datasetId) {
+        const presetSelect = document.getElementById('presetSelect');
+        presetSelect.innerHTML = '<option value="">로딩 중...</option>';
+
+        fetch(`/analysis/preset/get/${datasetId}/`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.text(); // First get text to debug issues
+            })
+            .then(text => {
+                try {
+                    const data = JSON.parse(text);
+                    presetSelect.innerHTML = '<option value="">프리셋 선택...</option>';
+                    if (data.presets && data.presets.length > 0) {
+                        data.presets.forEach(p => {
+                            const option = document.createElement('option');
+                            option.value = p.id;
+                            option.textContent = `${p.name} (${new Date(p.created_at).toLocaleDateString()})`;
+                            presetSelect.appendChild(option);
+                        });
+                    } else {
+                        const option = document.createElement('option');
+                        option.text = "저장된 프리셋 없음";
+                        presetSelect.add(option);
+                    }
+                } catch (e) {
+                    console.error('JSON Parse Error:', e, text);
+                    presetSelect.innerHTML = `<option value="">오류: 서버 응답 형식 확인 필요 (${e.message})</option>`;
+                }
+            })
+            .catch(error => {
+                console.error('Error loading presets:', error);
+                presetSelect.innerHTML = `<option value="">프리셋 로드 실패: ${error.message}</option>`;
+            });
+    }
+
+    // 모달 표시
+    var savePresetModal;
+    function showSavePresetModal() {
+        if (!document.getElementById('dataset').value) {
+            alert('먼저 데이터를 선택해주세요.');
+            return;
+        }
+        if (selectedRowVars.length === 0 || selectedColVars.length === 0) {
+            alert('최소한 행 변수와 열 변수를 선택해야 저장할 수 있습니다.');
+            return;
+        }
+
+        if (!savePresetModal) {
+            savePresetModal = new bootstrap.Modal(document.getElementById('savePresetModal'));
+        }
+        document.getElementById('presetName').value = '';
+        savePresetModal.show();
+    }
+
+    // 프리셋 저장 실행
+    function saveContextPreset() {
+        const name = document.getElementById('presetName').value;
+        if (!name) {
+            alert('프리셋 이름을 입력해주세요.');
+            return;
+        }
+
+        const datasetId = document.getElementById('dataset').value;
+
+        // 현재 설정 수집
+        const config = {
+            codebook_id: document.getElementById('codebook').value,
+            row_variables: selectedRowVars,
+            col_variables: selectedColVars,
+            col_statistics: colVarStats,
+            weight_variable: document.getElementById('weight_variable').value,
+            global_options: {
+                show_total: document.getElementById('showTotal').checked,
+                mean_decimals: document.getElementById('meanDecimals').value,
+                show_chi_label: document.getElementById('showChiLabel').checked,
+                show_chi_value: document.getElementById('showChiValue').checked,
+                show_chi_df: document.getElementById('showChiDf').checked,
+                show_chi_stars: document.getElementById('showChiStars').checked,
+                show_chi_pvalue: document.getElementById('showChiPvalue').checked,
+                show_tf_label: document.getElementById('showTfLabel').checked,
+                show_tf_value: document.getElementById('showTfValue').checked,
+                show_tf_df: document.getElementById('showTfDf').checked,
+                show_tf_stars: document.getElementById('showTfStars').checked,
+                show_tf_pvalue: document.getElementById('showTfPvalue').checked,
+                auto_test: document.getElementById('autoTest').checked
+            }
+        };
+
+        const formData = new FormData();
+        formData.append('dataset_id', datasetId);
+        formData.append('name', name);
+        formData.append('configuration', JSON.stringify(config));
+        formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+
+        fetch('/analysis/preset/save/', {
+            method: 'POST',
+            body: formData
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message);
+                    savePresetModal.hide();
+                    loadPresetsForDataset(datasetId); // 목록 갱신
+                } else {
+                    alert('저장 실패: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error saving preset:', error);
+                alert('저장 중 오류가 발생했습니다.');
+            });
+    }
+
+    // 프리셋 삭제 실행
+    function deleteSelectedPreset() {
+        const presetId = document.getElementById('presetSelect').value;
+        if (!presetId) {
+            alert('삭제할 프리셋을 선택해주세요.');
+            return;
+        }
+
+        if (!confirm('정말 이 프리셋을 삭제하시겠습니까?')) return;
+
+        const formData = new FormData();
+        formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+
+        fetch(`/analysis/preset/delete/${presetId}/`, {
+            method: 'POST',
+            body: formData
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message);
+                    const datasetId = document.getElementById('dataset').value;
+                    loadPresetsForDataset(datasetId); // 목록 갱신
+                } else {
+                    alert('삭제 실패: ' + (data.error || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                console.error('Error deleting preset:', error);
+                alert('삭제 중 오류가 발생했습니다.');
+            });
+    }
+
+    // 프리셋 로드 실행
+    function loadSelectedPreset() {
+        const presetId = document.getElementById('presetSelect').value;
+        if (!presetId) {
+            alert('불러올 프리셋을 선택해주세요.');
+            return;
+        }
+
+        if (!confirm('현재 설정이 모두 덮어씌워집니다. 계속하시겠습니까?')) return;
+
+        fetch(`/analysis/preset/load/${presetId}/`)
+            .then(response => response.json())
+            .then(data => {
+                applyConfiguration(data.configuration);
+            })
+            .catch(error => {
+                console.error('Error loading preset:', error);
+                alert('프리셋 로드 중 오류가 발생했습니다.');
+            });
+    }
+
+    // 설정 적용 함수
+    function applyConfiguration(config) {
+        // 코드북 선택 (있다면)
+        if (config.codebook_id) {
+            const cbSelect = document.getElementById('codebook');
+            if (cbSelect.querySelector(`option[value="${config.codebook_id}"]`)) {
+                cbSelect.value = config.codebook_id;
+            }
+        }
+
+        // 가중치 변수
+        if (config.weight_variable) {
+            const wtSelect = document.getElementById('weight_variable');
+            // 변수 목록이 이미 로드되어 있어야 함 (같은 데이터셋 내 프리셋이므로 가정)
+            wtSelect.value = config.weight_variable;
+        }
+
+        // 행 변수 복원
+        selectedRowVars = config.row_variables || [];
+
+        // 열 변수 복원
+        selectedColVars = config.col_variables || [];
+
+        // 통계량 옵션 복원
+        colVarStats = config.col_statistics || {};
+
+        // 전역 옵션 복원
+        if (config.global_options) {
+            const opts = config.global_options;
+            setCheckbox('showTotal', opts.show_total);
+            setValue('meanDecimals', opts.mean_decimals);
+
+            setCheckbox('showChiLabel', opts.show_chi_label);
+            setCheckbox('showChiValue', opts.show_chi_value);
+            setCheckbox('showChiDf', opts.show_chi_df);
+            setCheckbox('showChiStars', opts.show_chi_stars);
+            setCheckbox('showChiPvalue', opts.show_chi_pvalue);
+
+            setCheckbox('showTfLabel', opts.show_tf_label);
+            setCheckbox('showTfValue', opts.show_tf_value);
+            setCheckbox('showTfDf', opts.show_tf_df);
+            setCheckbox('showTfStars', opts.show_tf_stars);
+            setCheckbox('showTfPvalue', opts.show_tf_pvalue);
+
+            setCheckbox('autoTest', opts.auto_test);
+
+            // 이벤트 트리거 (포맷 예시 업데이트 등)
+            document.getElementById('showChiLabel').dispatchEvent(new Event('change'));
+            document.getElementById('showTfLabel').dispatchEvent(new Event('change'));
+            document.getElementById('autoTest').dispatchEvent(new Event('change'));
+        }
+
+        // UI 갱신
+        renderVariableLists();
+        renderSelectedVars();
+
+        alert('프리셋이 적용되었습니다.');
+    }
+
+    function setCheckbox(id, checked) {
+        const el = document.getElementById(id);
+        if (el) el.checked = !!checked;
+    }
+
+    function setValue(id, value) {
+        const el = document.getElementById(id);
+        if (el) el.value = value;
+    }
 
     // 변수 목록 로드
     function loadVariables(datasetId) {
@@ -939,6 +1220,22 @@
         } else {
             optionsDiv.style.opacity = '0.5';
             optionsDiv.querySelectorAll('input').forEach(input => input.disabled = true);
+        }
+    });
+
+    // 페이지 로드 시 초기화
+    document.addEventListener('DOMContentLoaded', function () {
+        const datasetSelect = document.getElementById('dataset');
+
+        if (datasetSelect.value) {
+            loadPresetsForDataset(datasetSelect.value);
+        } else {
+            // 브라우저 자동완성이 늦게 적용될 수 있으므로 잠시 후 재시도
+            setTimeout(() => {
+                if (datasetSelect.value) {
+                    loadPresetsForDataset(datasetSelect.value);
+                }
+            }, 500);
         }
     });
 </script>
