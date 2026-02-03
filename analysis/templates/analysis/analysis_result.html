@@ -169,7 +169,7 @@
                 <tbody>
                     {% for row_var_result in analysis.unified.row_var_results %}
                     {% for row in row_var_result.rows %}
-                    <tr {% if row.label=='Total' %}class="total-row" {% endif %}>
+                    <tr {% if row.label == 'Total' %}class="total-row" {% endif %}>
                         <td class="row-header">{{ row.label|truncate_with_tooltip:40 }}</td>
                         {% for value in row.values %}
                         <td>
@@ -234,7 +234,7 @@
                     <tr>
                         <th>행 % (Row %)</th>
                         {% for col in analysis.frequency.row_var_results.0.tables.0.data.columns %}
-                        <th {% if col=='Total' %}class="total-col" {% endif %}>{{ col }}</th>
+                        <th {% if col == 'Total' %}class="total-col" {% endif %}>{{ col }}</th>
                         {% endfor %}
                     </tr>
                 </thead>
@@ -242,11 +242,11 @@
                     {% for row_result in analysis.frequency.row_var_results %}
                     {% for table in row_result.tables %}
                     {% for row_idx in table.data.index %}
-                    <tr {% if row_idx=='Total' %}class="total-row" {% endif %}>
+                    <tr {% if row_idx == 'Total' %}class="total-row" {% endif %}>
                         <td class="row-header">{{ row_idx|truncate_with_tooltip:40 }}</td>
                         {% with row_index=forloop.counter0 %}
                         {% for value in table.data.data|index:row_index %}
-                        <td {% if table.data.columns|index:forloop.counter0=='Total' %}class="total-col" {% endif %}>
+                        <td {% if table.data.columns|index:forloop.counter0 == 'Total' %}class="total-col" {% endif %}>
                             {% if table.data.columns|index:forloop.counter0 == '사례수' %}
                             {# 사례수는 그대로 표시 #}
                             {{ value }}
@@ -307,7 +307,7 @@
                 <tbody>
                     {% for row_var_result in analysis.descriptive.row_var_results %}
                     {% for row in row_var_result.rows %}
-                    <tr {% if row.label=='Total' %}class="total-row" {% endif %}>
+                    <tr {% if row.label == 'Total' %}class="total-row" {% endif %}>
                         <td class="row-header">{{ row.label|truncate_with_tooltip:40 }}</td>
                         {% for value in row.values %}
                         <td>{{ value|floatformat:2 }}</td>
