@@ -329,9 +329,14 @@
         </div>
         {% endif %} {# analysis.descriptive 종료 #}
     </div>
+    </div>
     {% endfor %} {# result loop 종료 #}
+    {% endfor %} {# analysis loop 종료 - 146번째 줄의 for analysis in result #}
 </div>
 
+{% endblock %}
+
+{% block extra_js %}
 <script>
     function getCookie(name) {
         let cookieValue = null;
