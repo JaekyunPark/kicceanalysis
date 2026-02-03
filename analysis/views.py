@@ -13,6 +13,14 @@ try:
 except ImportError:
     pyreadstat = None
 
+def dataframe_to_template_dict(df):
+    """Pandas DataFrame을 템플릿에서 사용하기 쉬운 딕셔너리로 변환"""
+    return {
+        'columns': list(df.columns),
+        'index': list(df.index),
+        'data': df.values.tolist()
+    }
+
 def weighted_mean(values, weights):
     """가중 평균 계산"""
     try:
@@ -529,30 +537,31 @@ def perform_combined_freq_desc_analysis(df, row_variables, col_var, stats_config
                     # 원본 백분율 값을 저장 (계 계산용)
                     pct_values = []
                     
-                    # 각 열 값에 대한 백분율
+                    # 각 열 값에 대한 백분율 및 빈도 병합 (사용자 요청: 빈도(비율) 형식)
                     for col_val in unique_values:
                         if col_val in row_pct.columns:
                             pct_val = row_pct.iloc[0, row_pct.columns.get_loc(col_val)]
-                            pct_values.append(pct_val)  # 원본 값 저장
-                            if show_percent:
-                                row_data.append(f"{pct_val:.1f}%")
+                            pct_values.append(pct_val)
+                            
+                            if weights is not None:
+                                count_val = crosstab_weighted.iloc[0, crosstab_weighted.columns.get_loc(col_val)]
                             else:
-                                row_data.append(f"{pct_val:.1f}")
+                                count_val = crosstab.iloc[0, crosstab.columns.get_loc(col_val)]
+                            
+                            # 빈도(비율) 형식으로 저장
+                            row_data.append(f"{int(round(count_val))}({pct_val:.1f})")
                         else:
-                            pct_values.append(0.0)  # 원본 값 저장
-                            row_data.append("0.0%" if show_percent else "0.0")
+                            pct_values.append(0.0)
+                            row_data.append("0(0.0)")
                     
                     if options['show_total']:
-                        row_data.append("100.0%" if show_percent else "100.0")
+                        row_data.append(f"{row_count}(100.0)")
                     
-                    # 계 추가 - 반올림 전 원본 값들을 더하고 마지막에 반올림
+                    # 계 추가
                     row_sum = sum(pct_values)
-                    if show_percent:
-                        row_data.append(f"{row_sum:.1f}%")
-                    else:
-                        row_data.append(f"{row_sum:.1f}")
+                    row_data.append(f"{row_count}({row_sum:.1f})")
                     
-                    # 사례수 추가 (괄호 안에)
+                    # 사례수 추가
                     row_data.append(f"({row_count})")
                         
                 elif stats_config.get('count'):
@@ -623,16 +632,19 @@ def perform_combined_freq_desc_analysis(df, row_variables, col_var, stats_config
                     
                     for col_val in unique_values:
                         if col_val in col_totals.index:
-                            total_data.append(f"{col_totals[col_val]:.1f}%")
+                            # 전체 빈도 합계도 필요 (위에서 total_crosstab을 normalize='all'로 했으니 빈도 crosstab 다시 필요)
+                            crosstab_count = pd.crosstab(df[row_var], df[col_var])
+                            col_total_count = crosstab_count[col_val].sum()
+                            total_data.append(f"{int(col_total_count)}({col_totals[col_val]:.1f})")
                         else:
-                            total_data.append("0.0%")
+                            total_data.append("0(0.0)")
                     
                     if options['show_total']:
-                        total_data.append("100.0%")
+                        total_data.append(f"{total_count}(100.0)")
                     
                     # 계 추가
-                    total_sum = sum([float(x.rstrip('%')) for x in total_data if '%' in x])
-                    total_data.append(f"{total_sum:.1f}%")
+                    pct_sum = sum([float(x.split('(')[1].rstrip(')')) for x in total_data if '(' in x])
+                    total_data.append(f"{total_count}({pct_sum:.1f})")
                     
                     # 사례수 추가
                     total_data.append(f"({total_count})")
@@ -1020,39 +1032,61 @@ def perform_frequency_analysis_combined(df, row_variables, col_var, stats_config
             print(f"원본 인덱스: {list(count_data.index)}")
             print(f"사례수 딕셔너리: {row_counts_dict}")
             
+            # 레이블 적용 전 빈도를 백분율과 결합하여 문자열로 변환
+            # count_data는 crosstab과 동일한 구조
+            
+            # DataFrame을 순회하며 빈도(백분율) 형식으로 변환
+            combined_data = []
+            for i in range(len(row_pct)):
+                row_vals = []
+                for j in range(len(row_pct.columns)):
+                    if j < len(crosstab.columns):
+                        cnt = crosstab.iloc[i, j]
+                        pct = row_pct.iloc[i, j]
+                        row_vals.append(f"{int(round(cnt))}({pct:.1f})")
+                    else:
+                        # 계 열 (아직 합산 전일 수 있음)
+                        pct = row_pct.iloc[i, j]
+                        cnt = crosstab.iloc[i].sum()
+                        row_vals.append(f"{int(round(cnt))}({pct:.1f})")
+                combined_data.append(row_vals)
+            
+            # row_pct를 문자열 기반 DataFrame으로 재생성
+            row_pct_combined = pd.DataFrame(combined_data, index=row_pct.index, columns=row_pct.columns)
+            
             # 레이블 적용
             if codebook_data:
-                row_pct = apply_labels_to_dataframe(row_pct, row_var, col_var, codebook_data)
+                row_pct_combined = apply_labels_to_dataframe(row_pct_combined, row_var, col_var, codebook_data)
             
-            print(f"레이블 적용 후 인덱스: {list(row_pct.index)}")
+            # 계 추가 (문자열이라 sum이 안 되므로 직접 계산)
+            row_counts_list = []
+            row_pcts_list = []
+            for i in range(len(row_pct)):
+                row_counts_list.append(int(round(crosstab.iloc[i].sum())))
+                row_pcts_list.append(row_pct.iloc[i].sum())
             
-            # 계 추가
-            row_pct['계'] = row_pct.sum(axis=1)
+            row_pct_combined['계'] = [f"{cnt}({pct:.1f})" for cnt, pct in zip(row_counts_list, row_pcts_list)]
             
-            # 사례수 추가 - 순서대로 매칭
+            # 사례수 추가
             case_counts = []
-            original_indices = list(count_data.index)  # 원본 인덱스 순서
-            for i, labeled_idx in enumerate(row_pct.index):
+            original_indices = list(crosstab.index)
+            for i, labeled_idx in enumerate(row_pct_combined.index):
                 if i < len(original_indices):
-                    original_idx = original_indices[i]
-                    count_str = f"({row_counts_dict[original_idx]})"
-                    case_counts.append(count_str)
-                    print(f"  {i}: {labeled_idx} -> 원본 {original_idx} -> {count_str}")
+                    orig_idx = original_indices[i]
+                    count = int(round(crosstab.loc[orig_idx].sum()))
+                    case_counts.append(f"({count})")
                 else:
                     case_counts.append("(0)")
-                    print(f"  {i}: {labeled_idx} -> 인덱스 초과 -> (0)")
             
-            row_pct['사례수'] = case_counts
-            print(f"최종 사례수 컬럼: {list(row_pct['사례수'])}")
-            print(f"row_pct 컬럼들: {list(row_pct.columns)}")
+            row_pct_combined['사례수'] = case_counts
             
-            new_index = [f"{row_label}: {idx}" if idx != 'Total' else idx for idx in row_pct.index]
-            row_pct.index = new_index
+            new_index = [f"{row_label}: {idx}" if idx != 'Total' else idx for idx in row_pct_combined.index]
+            row_pct_combined.index = new_index
             
             tables.append({
                 'type': 'row_pct',
                 'label': '행 % (Row %)',
-                'data': dataframe_to_template_dict(row_pct)
+                'data': dataframe_to_template_dict(row_pct_combined)
             })
         
         # 열 백분율
@@ -1127,21 +1161,37 @@ def perform_frequency_analysis(df, row_var, col_var, stats_config, codebook_data
         else:
             row_pct = pd.crosstab(df[row_var], df[col_var], normalize='index') * 100
         
-        # 계 컬럼 추가 (각 행의 합계 - 대부분 100.0)
-        row_pct['계'] = row_pct.sum(axis=1)
+        # 계 및 사례수 컬럼 추가를 위해 데이터 보강
+        # DataFrame을 순회하며 빈도(백분율) 형식으로 변환
+        combined_data = []
+        original_crosstab = crosstab.copy()
         
-        # 사례수 컬럼 추가 (빈도 합계)
-        row_counts = crosstab.sum(axis=1)
-        row_pct['사례수'] = row_counts.apply(lambda x: f'({int(round(x))})')
+        for i in range(len(row_pct)):
+            row_vals = []
+            for j in range(len(row_pct.columns)):
+                cnt = original_crosstab.iloc[i, j]
+                pct = row_pct.iloc[i, j]
+                row_vals.append(f"{int(round(cnt))}({pct:.1f})")
+            combined_data.append(row_vals)
+            
+        row_pct_combined = pd.DataFrame(combined_data, index=row_pct.index, columns=row_pct.columns)
+        
+        # 계 컬럼 추가
+        row_counts = original_crosstab.sum(axis=1)
+        row_pcts = row_pct.sum(axis=1) # 보통 100.0
+        row_pct_combined['계'] = [f"{int(round(cnt))}({pct:.1f})" for cnt, pct in zip(row_counts, row_pcts)]
+        
+        # 사례수 컬럼 추가
+        row_pct_combined['사례수'] = row_counts.apply(lambda x: f'({int(round(x))})')
         
         # 값 레이블 적용
         if codebook_data:
-            row_pct = apply_labels_to_dataframe(row_pct, row_var, col_var, codebook_data)
+            row_pct_combined = apply_labels_to_dataframe(row_pct_combined, row_var, col_var, codebook_data)
         
         result['tables'].append({
             'type': 'row_pct',
             'label': '행 % (Row %)',
-            'data': dataframe_to_template_dict(row_pct)
+            'data': dataframe_to_template_dict(row_pct_combined)
         })
     
     # 열 백분율

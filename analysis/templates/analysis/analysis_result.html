@@ -253,8 +253,11 @@
                             {{ value }}
                             {% elif table.type == 'count' %}
                             {{ value|floatformat:0 }}
+                            {% elif table.type == 'row_pct' %}
+                            {# '빈도(비율)' 형식은 이미 view에서 문자열로 생성됨 #}
+                            {{ value }}
                             {% else %}
-                            {# 백분율 - 계 열도 포함 #}
+                            {# 열 백분율 등 기타 백분율 #}
                             {% if row_result.percent_symbol %}
                             {{ value|floatformat:1 }}%
                             {% else %}
