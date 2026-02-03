@@ -169,7 +169,7 @@
                 <tbody>
                     {% for row_var_result in analysis.unified.row_var_results %}
                     {% for row in row_var_result.rows %}
-                    <tr {% if row.label == 'Total' %}class="total-row" {% endif %}>
+                    <tr {% if row.label=='Total' %}class="total-row" {% endif %}>
                         <td class="row-header">{{ row.label|truncate_with_tooltip:40 }}</td>
                         {% for value in row.values %}
                         <td>
@@ -234,7 +234,7 @@
                     <tr>
                         <th>행 % (Row %)</th>
                         {% for col in analysis.frequency.row_var_results.0.tables.0.data.columns %}
-                        <th {% if col == 'Total' %}class="total-col" {% endif %}>{{ col }}</th>
+                        <th {% if col=='Total' %}class="total-col" {% endif %}>{{ col }}</th>
                         {% endfor %}
                     </tr>
                 </thead>
@@ -242,11 +242,11 @@
                     {% for row_result in analysis.frequency.row_var_results %}
                     {% for table in row_result.tables %}
                     {% for row_idx in table.data.index %}
-                    <tr {% if row_idx == 'Total' %}class="total-row" {% endif %}>
+                    <tr {% if row_idx=='Total' %}class="total-row" {% endif %}>
                         <td class="row-header">{{ row_idx|truncate_with_tooltip:40 }}</td>
                         {% with row_index=forloop.counter0 %}
                         {% for value in table.data.data|index:row_index %}
-                        <td {% if table.data.columns|index:forloop.counter0 == 'Total' %}class="total-col" {% endif %}>
+                        <td {% if table.data.columns|index:forloop.counter0=='Total' %}class="total-col" {% endif %}>
                             {% if table.data.columns|index:forloop.counter0 == '사례수' %}
                             {# 사례수는 그대로 표시 #}
                             {{ value }}
@@ -307,7 +307,7 @@
                 <tbody>
                     {% for row_var_result in analysis.descriptive.row_var_results %}
                     {% for row in row_var_result.rows %}
-                    <tr {% if row.label == 'Total' %}class="total-row" {% endif %}>
+                    <tr {% if row.label=='Total' %}class="total-row" {% endif %}>
                         <td class="row-header">{{ row.label|truncate_with_tooltip:40 }}</td>
                         {% for value in row.values %}
                         <td>{{ value|floatformat:2 }}</td>
@@ -605,7 +605,6 @@
 
         // CSRF 토큰 (쿠키에서 가져오기)
         const csrfToken = getCookie('csrftoken');
-        console.log('CSRF Token:', csrfToken);
         const csrfInput = document.createElement('input');
         csrfInput.type = 'hidden';
         csrfInput.name = 'csrfmiddlewaretoken';
@@ -618,7 +617,6 @@
         datasetInput.name = 'dataset_id';
         datasetInput.value = '{{ dataset_id }}';
         form.appendChild(datasetInput);
-        console.log('Dataset ID:', '{{ dataset_id }}');
 
         // 코드북
         {% if codebook_id %}
@@ -627,34 +625,29 @@
         codebookInput.name = 'codebook_id';
         codebookInput.value = '{{ codebook_id }}';
         form.appendChild(codebookInput);
-        console.log('Codebook ID:', '{{ codebook_id }}');
         {% endif %}
 
         // 행 변수들
         {% for rv in row_variables %}
         const rowVarInput{{ forloop.counter }
     } = document.createElement('input');
-    rowVarInput{ { forloop.counter } }.type = 'hidden';
-    rowVarInput{ { forloop.counter } }.name = 'row_variables[]';
-    rowVarInput{ { forloop.counter } }.value = '{{ rv }}';
+        rowVarInput{ { forloop.counter } }.type = 'hidden';
+        rowVarInput{ { forloop.counter } }.name = 'row_variables[]';
+        rowVarInput{ { forloop.counter } }.value = '{{ rv }}';
     form.appendChild(rowVarInput{{ forloop.counter }});
-    console.log('Row var:', '{{ rv }}');
     {% endfor %}
 
-    // 열 변수들
     {% for cv in col_variables %}
     const colVarInput{{ forloop.counter }} = document.createElement('input');
-    colVarInput{ { forloop.counter } }.type = 'hidden';
-    colVarInput{ { forloop.counter } }.name = 'col_variables[]';
-    colVarInput{ { forloop.counter } }.value = '{{ cv }}';
+        colVarInput{ { forloop.counter } }.type = 'hidden';
+        colVarInput{ { forloop.counter } }.name = 'col_variables[]';
+        colVarInput{ { forloop.counter } }.value = '{{ cv }}';
     form.appendChild(colVarInput{{ forloop.counter }});
-    console.log('Col var:', '{{ cv }}');
     {% endfor %}
 
     // 통계량 설정 (JSON을 다시 개별 필드로)
     try {
         const colStatsJson = '{{ col_statistics|escapejs }}';
-        console.log('Col stats JSON:', colStatsJson);
         const colStats = JSON.parse(colStatsJson);
 
         for (const [colVar, stats] of Object.entries(colStats)) {
@@ -665,7 +658,6 @@
                     statInput.name = `col_statistics[${colVar}][${statType}]`;
                     statInput.value = 'on';
                     form.appendChild(statInput);
-                    console.log(`Stat: col_statistics[${colVar}][${statType}] = on`);
                 }
             }
         }
@@ -680,7 +672,6 @@
     totalInput.name = 'show_total';
     totalInput.value = 'on';
     form.appendChild(totalInput);
-    console.log('Show total: on');
     {% endif %}
 
     {% if auto_test %}
@@ -689,7 +680,6 @@
     testInput.name = 'auto_test';
     testInput.value = 'on';
     form.appendChild(testInput);
-    console.log('Auto test: on');
     {% endif %}
 
     // 표시 형식 옵션
@@ -706,49 +696,27 @@
     form.appendChild(decimalsInput);
 
     // 카이제곱 표시 형식
-    {% if show_chi_label %}
-    form.appendChild(createInput('show_chi_label', 'on'));
-    {% endif %}
-    {% if show_chi_value %}
-    form.appendChild(createInput('show_chi_value', 'on'));
-    {% endif %}
-    {% if show_chi_df %}
-    form.appendChild(createInput('show_chi_df', 'on'));
-    {% endif %}
-    {% if show_chi_stars %}
-    form.appendChild(createInput('show_chi_stars', 'on'));
-    {% endif %}
-    {% if show_chi_pvalue %}
-    form.appendChild(createInput('show_chi_pvalue', 'on'));
-    {% endif %}
+    {% if show_chi_label %} form.appendChild(createInput('show_chi_label', 'on')); {% endif %}
+    {% if show_chi_value %} form.appendChild(createInput('show_chi_value', 'on')); {% endif %}
+    {% if show_chi_df %} form.appendChild(createInput('show_chi_df', 'on')); {% endif %}
+    {% if show_chi_stars %} form.appendChild(createInput('show_chi_stars', 'on')); {% endif %}
+    {% if show_chi_pvalue %} form.appendChild(createInput('show_chi_pvalue', 'on')); {% endif %}
 
     // t/F 검정 표시 형식
-    {% if show_tf_label %}
-    form.appendChild(createInput('show_tf_label', 'on'));
-    {% endif %}
-    {% if show_tf_value %}
-    form.appendChild(createInput('show_tf_value', 'on'));
-    {% endif %}
-    {% if show_tf_df %}
-    form.appendChild(createInput('show_tf_df', 'on'));
-    {% endif %}
-    {% if show_tf_stars %}
-    form.appendChild(createInput('show_tf_stars', 'on'));
-    {% endif %}
-    {% if show_tf_pvalue %}
-    form.appendChild(createInput('show_tf_pvalue', 'on'));
-    {% endif %}
+    {% if show_tf_label %} form.appendChild(createInput('show_tf_label', 'on')); {% endif %}
+    {% if show_tf_value %} form.appendChild(createInput('show_tf_value', 'on')); {% endif %}
+    {% if show_tf_df %} form.appendChild(createInput('show_tf_df', 'on')); {% endif %}
+    {% if show_tf_stars %} form.appendChild(createInput('show_tf_stars', 'on')); {% endif %}
+    {% if show_tf_pvalue %} form.appendChild(createInput('show_tf_pvalue', 'on')); {% endif %}
 
-    console.log('Submitting form...');
     document.body.appendChild(form);
     form.submit();
 
     // 폼 제거는 약간 지연
     setTimeout(() => {
         document.body.removeChild(form);
-        console.log('Form removed');
     }, 1000);
-}
+    }
 
     // 헬퍼 함수
     function createInput(name, value) {
