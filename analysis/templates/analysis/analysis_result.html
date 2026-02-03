@@ -43,7 +43,7 @@
         font-weight: 500;
     }
 
-    /* �??�스???�팁 */
+    /* 긴 텍스트 툴팁 */
     .long-text {
         max-width: 200px;
         overflow: hidden;
@@ -132,13 +132,13 @@
         <h2>분석 결과</h2>
         <div class="export-buttons">
             <button class="btn btn-info" onclick="copyTableToClipboard()">
-                <i class="bi bi-clipboard"></i> ??복사
+                <i class="bi bi-clipboard"></i> 표 복사
             </button>
             <button class="btn btn-success" onclick="exportToExcel()">
-                <i class="bi bi-file-excel"></i> Excel�??�보?�기
+                <i class="bi bi-file-excel"></i> Excel로 내보내기
             </button>
             <a href="{% url 'analysis:unified_analysis' %}?dataset_id={{ dataset_id }}" class="btn btn-secondary">
-                ??분석
+                새 분석
             </a>
         </div>
     </div>
@@ -149,18 +149,18 @@
             <h4>{% for label in analysis.row_labels %}{{ label }}{% if not forloop.last %}, {% endif %}{% endfor %} × {{
                 analysis.col_label }}</h4>
             <p class="mb-0 text-muted">
-                <small>??변?? {% for rv in analysis.row_variables %}{{ rv }}{% if not forloop.last %}, {% endif %}{%
-                    endfor %} | ??변?? {{ analysis.col_var }}</small>
+                <small>행 변수: {% for rv in analysis.row_variables %}{{ rv }}{% if not forloop.last %}, {% endif %}{%
+                    endfor %} | 열 변수: {{ analysis.col_var }}</small>
             </p>
         </div>
 
         {% if analysis.unified %}
-        <!-- ?�합 분석 결과 (빈도 + 기술?�계) -->
+        <!-- 통합 분석 결과 (빈도 + 기술통계) -->
         <div class="table-wrapper">
             <table class="analysis-table">
                 <thead>
                     <tr>
-                        <th>?�계??/th>
+                        <th>통계량</th>
                         {% for col in analysis.unified.columns %}
                         <th>{{ col|truncate_with_tooltip:30 }}</th>
                         {% endfor %}
@@ -169,7 +169,7 @@
                 <tbody>
                     {% for row_var_result in analysis.unified.row_var_results %}
                     {% for row in row_var_result.rows %}
-                    <tr {% if row.label == 'Total' %}class="total-row" {% endif %}>
+                    <tr {% if row.label=='Total' %}class="total-row" {% endif %}>
                         <td class="row-header">{{ row.label|truncate_with_tooltip:40 }}</td>
                         {% for value in row.values %}
                         <td>
@@ -183,38 +183,38 @@
                     </tr>
                     {% endfor %}
 
-                    <!-- 검???�계??- �?분리 -->
+                    <!-- 검정 통계량 - 칸 분리 -->
                     {% if row_var_result.chi_square_test or row_var_result.descriptive_test %}
                     <tr>
-                        <td class="row-header">검???�계??/td>
+                        <td class="row-header">검정 통계량</td>
 
                         {% if analysis.unified.desc_col_count > 0 %}
-                        <!-- 빈도?� 기술?�계 ?????�는 경우 -->
-                        <!-- 빈도 ?�역: 계�? ?��???2�????�외 -->
+                        <!-- 빈도와 기술통계 둘 다 있는 경우 -->
+                        <!-- 빈도 영역: 계와 사례수 2개 열 제외 -->
                         <td colspan="{% if analysis.unified.freq_col_count > 2 %}{{ analysis.unified.freq_col_count|add:'-2' }}{% else %}{{ analysis.unified.freq_col_count }}{% endif %}"
                             class="test-statistics">
                             {% if row_var_result.chi_square_test %}
                             {{ row_var_result.chi_square_test.formatted }}
                             {% endif %}
                         </td>
-                        <!-- 계�? ?��???�?(병합 ???? -->
+                        <!-- 계와 사례수 칸 (병합 안 함) -->
                         <td></td>
                         <td></td>
-                        <!-- 기술?�계 ?�역 -->
+                        <!-- 기술통계 영역 -->
                         <td colspan="{{ analysis.unified.desc_col_count }}" class="test-statistics">
                             {% if row_var_result.descriptive_test %}
                             {{ row_var_result.descriptive_test.formatted }}
                             {% endif %}
                         </td>
                         {% else %}
-                        <!-- 빈도�??�는 경우 - 계�? ?��????�외?�고 병합 -->
+                        <!-- 빈도만 있는 경우 - 계와 사례수 제외하고 병합 -->
                         <td colspan="{% if analysis.unified.freq_col_count > 2 %}{{ analysis.unified.freq_col_count|add:'-2' }}{% else %}{{ analysis.unified.freq_col_count }}{% endif %}"
                             class="test-statistics">
                             {% if row_var_result.chi_square_test %}
                             {{ row_var_result.chi_square_test.formatted }}
                             {% endif %}
                         </td>
-                        <!-- 계�? ?��???�?(병합 ???? -->
+                        <!-- 계와 사례수 칸 (병합 안 함) -->
                         <td></td>
                         <td></td>
                         {% endif %}
@@ -232,9 +232,9 @@
             <table class="analysis-table">
                 <thead>
                     <tr>
-                        <th>??% (Row %)</th>
+                        <th>행 % (Row %)</th>
                         {% for col in analysis.frequency.row_var_results.0.tables.0.data.columns %}
-                        <th {% if col == 'Total' %}class="total-col" {% endif %}>{{ col }}</th>
+                        <th {% if col=='Total' %}class="total-col" {% endif %}>{{ col }}</th>
                         {% endfor %}
                     </tr>
                 </thead>
@@ -242,18 +242,18 @@
                     {% for row_result in analysis.frequency.row_var_results %}
                     {% for table in row_result.tables %}
                     {% for row_idx in table.data.index %}
-                    <tr {% if row_idx == 'Total' %}class="total-row" {% endif %}>
+                    <tr {% if row_idx=='Total' %}class="total-row" {% endif %}>
                         <td class="row-header">{{ row_idx|truncate_with_tooltip:40 }}</td>
                         {% with row_index=forloop.counter0 %}
                         {% for value in table.data.data|index:row_index %}
-                        <td {% if table.data.columns|index:forloop.counter0 == 'Total' %}class="total-col" {% endif %}>
-                            {% if table.data.columns|index:forloop.counter0 == '?��??? %}
-                            {# ?��??�는 그�?�??�시 #}
+                        <td {% if table.data.columns|index:forloop.counter0=='Total' %}class="total-col" {% endif %}>
+                            {% if table.data.columns|index:forloop.counter0 == '사례수' %}
+                            {# 사례수는 그대로 표시 #}
                             {{ value }}
                             {% elif table.type == 'count' %}
                             {{ value|floatformat:0 }}
                             {% else %}
-                            {# 백분??- �??�도 ?�함 #}
+                            {# 백분율 - 계 열도 포함 #}
                             {% if row_result.percent_symbol %}
                             {{ value|floatformat:1 }}%
                             {% else %}
@@ -267,16 +267,16 @@
                     {% endfor %}
                     {% endfor %}
 
-                    <!-- ????변?�의 카이?�곱 검??결과 (?�이�????�으�??�입) -->
+                    <!-- 이 행 변수의 카이제곱 검정 결과 (테이블 내 행으로 삽입) -->
                     {% if row_result.chi_square %}
                     <tr>
-                        <td class="row-header">검???�계??/td>
-                        <!-- 계�? ?��???2�????�외?�고 병합 -->
+                        <td class="row-header">검정 통계량</td>
+                        <!-- 계와 사례수 2개 열 제외하고 병합 -->
                         <td colspan="{% if row_result.tables.0.data.columns|length > 2 %}{{ row_result.tables.0.data.columns|length|add:'-2' }}{% else %}{{ row_result.tables.0.data.columns|length }}{% endif %}"
                             class="test-statistics">
                             {{ row_result.chi_square.formatted }}
                         </td>
-                        <!-- 계�? ?��???�?(병합 ???? -->
+                        <!-- 계와 사례수 칸 (병합 안 함) -->
                         <td></td>
                         <td></td>
                     </tr>
@@ -288,7 +288,7 @@
         {% endif %}
 
         {% if analysis.descriptive %}
-        <!-- 기술?�계 결과 -->
+        <!-- 기술통계 결과 -->
         <div class="table-wrapper">
             {% if analysis.descriptive.error %}
             <div class="alert alert-warning">
@@ -298,7 +298,7 @@
             <table class="analysis-table">
                 <thead>
                     <tr>
-                        <th>?�계??/th>
+                        <th>통계량</th>
                         {% for col in analysis.descriptive.columns %}
                         <th>{{ col }}</th>
                         {% endfor %}
@@ -307,7 +307,7 @@
                 <tbody>
                     {% for row_var_result in analysis.descriptive.row_var_results %}
                     {% for row in row_var_result.rows %}
-                    <tr {% if row.label == 'Total' %}class="total-row" {% endif %}>
+                    <tr {% if row.label=='Total' %}class="total-row" {% endif %}>
                         <td class="row-header">{{ row.label|truncate_with_tooltip:40 }}</td>
                         {% for value in row.values %}
                         <td>{{ value|floatformat:2 }}</td>
@@ -315,10 +315,10 @@
                     </tr>
                     {% endfor %}
 
-                    <!-- ????변?�의 검??결과 (?�이�????�으�??�입) -->
+                    <!-- 이 행 변수의 검정 결과 (테이블 내 행으로 삽입) -->
                     {% if row_var_result.statistical_test %}
                     <tr>
-                        <td class="row-header">검???�계??/td>
+                        <td class="row-header">검정 통계량</td>
                         <td colspan="{{ analysis.descriptive.columns|length }}" class="test-statistics">
                             {{ row_var_result.statistical_test.formatted }}
                         </td>
@@ -327,7 +327,7 @@
                     {% endfor %}
                 </tbody>
             </table>
-            {% endif %} {# descriptive.error??else 종료 #}
+            {% endif %} {# descriptive.error의 else 종료 #}
         </div>
         {% endif %} {# analysis.descriptive 종료 #}
     </div>
@@ -352,41 +352,42 @@
 
     function copyTableToClipboard() {
         try {
-            // 모든 분석 결과 ?�이�??�회
+            // 모든 분석 결과 테이블 순회
             const resultTables = document.querySelectorAll('.result-table');
 
             if (resultTables.length === 0) {
-                alert('복사???�이블이 ?�습?�다.');
+                alert('복사할 테이블이 없습니다.');
                 return;
             }
 
             let htmlContent = '<html><body>';
 
             resultTables.forEach((resultTable, index) => {
-                // ?�목 추�?
+                // 제목 추가
                 const title = resultTable.querySelector('.result-title h4');
                 if (title) {
                     htmlContent += '<h4>' + title.textContent.trim() + '</h4>';
                 }
 
-                // ?�이�?복사 (?�본 HTML 그�?�?
+                // 테이블 복사 (원본 HTML 그대로)
                 const tables = resultTable.querySelectorAll('.analysis-table');
                 tables.forEach(table => {
-                    // ?�이�?복제
+                    // 테이블 복제
                     const clonedTable = table.cloneNode(true);
 
-                    // ?��????�라?�으�?추�?
+                    // 스타일 인라인으로 추가
                     clonedTable.setAttribute('border', '1');
                     clonedTable.style.borderCollapse = 'collapse';
                     clonedTable.style.width = 'auto';
 
-                    // 모든 ?�???�두�??��???추�?
+                    // 모든 셀에 테두리 스타일 추가
                     const allCells = clonedTable.querySelectorAll('th, td');
                     allCells.forEach(cell => {
                         cell.style.border = '1px solid black';
                         cell.style.padding = '4px 8px';
 
-                        // 기존 ?�래??기반 ?��??�을 ?�라?�으�?변??                        if (cell.classList.contains('row-header')) {
+                        // 기존 클래스 기반 스타일을 인라인으로 변환
+                        if (cell.classList.contains('row-header')) {
                             cell.style.fontWeight = 'bold';
                         }
                         if (cell.classList.contains('total-row') || cell.classList.contains('total-col')) {
@@ -415,21 +416,21 @@
 
             htmlContent += '</body></html>';
 
-            // ?�립보드??복사
+            // 클립보드에 복사
             const blob = new Blob([htmlContent], { type: 'text/html' });
             const clipboardItem = new ClipboardItem({ 'text/html': blob });
 
             navigator.clipboard.write([clipboardItem]).then(() => {
                 showCopySuccess();
             }).catch(err => {
-                console.error('HTML 복사 ?�패, ?�스?�로 ?�도:', err);
-                // Fallback: ?�스?�로 복사
+                console.error('HTML 복사 실패, 텍스트로 시도:', err);
+                // Fallback: 텍스트로 복사
                 fallbackTextCopy();
             });
 
         } catch (error) {
-            console.error('복사 ?�류:', error);
-            // Fallback: ?�스?�로 복사
+            console.error('복사 오류:', error);
+            // Fallback: 텍스트로 복사
             fallbackTextCopy();
         }
     }
@@ -451,7 +452,7 @@
                 tables.forEach(table => {
                     const rows = table.querySelectorAll('tr');
 
-                    // 병합???� 추적
+                    // 병합된 셀 추적
                     const cellMatrix = [];
 
                     rows.forEach((row, rowIndex) => {
@@ -496,12 +497,12 @@
                 }
             });
 
-            // ?�스??복사
+            // 텍스트 복사
             navigator.clipboard.writeText(textData).then(() => {
                 showCopySuccess();
             }).catch(err => {
-                console.error('?�스??복사???�패:', err);
-                // 최후???�단: execCommand
+                console.error('텍스트 복사도 실패:', err);
+                // 최후의 수단: execCommand
                 const textarea = document.createElement('textarea');
                 textarea.value = textData;
                 textarea.style.position = 'fixed';
@@ -515,19 +516,19 @@
                     showCopySuccess();
                 } catch (e) {
                     document.body.removeChild(textarea);
-                    alert('복사???�패?�습?�다. 브라?��?가 복사 기능??지?�하지 ?�습?�다.');
+                    alert('복사에 실패했습니다. 브라우저가 복사 기능을 지원하지 않습니다.');
                 }
             });
 
         } catch (error) {
-            console.error('Fallback 복사 ?�류:', error);
-            alert('복사 �??�류가 발생?�습?�다: ' + error.message);
+            console.error('Fallback 복사 오류:', error);
+            alert('복사 중 오류가 발생했습니다: ' + error.message);
         }
     }
 
     function fallbackCopy(text) {
         try {
-            // ?�시 textarea ?�성
+            // 임시 textarea 생성
             const textarea = document.createElement('textarea');
             textarea.value = text;
             textarea.style.position = 'fixed';
@@ -535,7 +536,7 @@
             textarea.style.top = '0';
             document.body.appendChild(textarea);
 
-            // ?�스???�택 �?복사
+            // 텍스트 선택 및 복사
             textarea.focus();
             textarea.select();
 
@@ -547,8 +548,8 @@
                     throw new Error('execCommand failed');
                 }
             } catch (err) {
-                console.error('execCommand ?�패:', err);
-                // 방법 3: ?�동 ?�택 ?�내
+                console.error('execCommand 실패:', err);
+                // 방법 3: 수동 선택 안내
                 textarea.style.position = 'static';
                 textarea.style.width = '100%';
                 textarea.style.height = '200px';
@@ -566,9 +567,9 @@
                 modal.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)';
 
                 modal.innerHTML = `
-                <h4>복사???�이??/h4>
-                <p>?�래 ?�스?��? ?�택?�여 복사?�세??(Ctrl+C ?�는 Cmd+C):</p>
-                <button onclick="this.parentElement.remove()" style="float: right; margin-bottom: 10px;">?�기</button>
+                <h4>복사할 데이터</h4>
+                <p>아래 텍스트를 선택하여 복사하세요 (Ctrl+C 또는 Cmd+C):</p>
+                <button onclick="this.parentElement.remove()" style="float: right; margin-bottom: 10px;">닫기</button>
                 <div style="clear: both;"></div>
             `;
                 modal.appendChild(textarea);
@@ -576,33 +577,33 @@
                 document.body.appendChild(modal);
                 textarea.select();
             } finally {
-                // textarea가 모달???�으�??�거
+                // textarea가 모달에 없으면 제거
                 if (textarea.parentElement === document.body) {
                     document.body.removeChild(textarea);
                 }
             }
 
         } catch (error) {
-            console.error('Fallback 복사 ?�패:', error);
-            alert('?�립보드 복사�?지?�하지 ?�는 브라?��??�니?? ?�동?�로 복사?�주?�요.');
+            console.error('Fallback 복사 실패:', error);
+            alert('클립보드 복사를 지원하지 않는 브라우저입니다. 수동으로 복사해주세요.');
         }
     }
 
     function showCopySuccess() {
-        // 간단???�림 ?�시
-        alert('???�이블이 ?�립보드??복사?�었?�니??\n\nExcel ?�는 Google Sheets??붙여?�기 ?�세??');
+        // 간단한 알림 표시
+        alert('✓ 테이블이 클립보드에 복사되었습니다!\n\nExcel 또는 Google Sheets에 붙여넣기 하세요.');
     }
 
     function exportToExcel() {
         console.log('Export button clicked');
 
-        // ???�성 �??�출
+        // 폼 생성 및 제출
         const form = document.createElement('form');
         form.method = 'POST';
         form.action = '{% url "analysis:export_excel" %}';
         form.style.display = 'none';
 
-        // CSRF ?�큰 (쿠키?�서 가?�오�?
+        // CSRF 토큰 (쿠키에서 가져오기)
         const csrfToken = getCookie('csrftoken');
         const csrfInput = document.createElement('input');
         csrfInput.type = 'hidden';
@@ -610,14 +611,15 @@
         csrfInput.value = csrfToken;
         form.appendChild(csrfInput);
 
-        // ?�이?�셋
+        // 데이터셋
         const datasetInput = document.createElement('input');
         datasetInput.type = 'hidden';
         datasetInput.name = 'dataset_id';
         datasetInput.value = '{{ dataset_id }}';
         form.appendChild(datasetInput);
 
-        // 코드�?        {% if codebook_id %}
+        // 코드북
+        {% if codebook_id %}
         const codebookInput = document.createElement('input');
         codebookInput.type = 'hidden';
         codebookInput.name = 'codebook_id';
@@ -625,24 +627,25 @@
         form.appendChild(codebookInput);
         {% endif %}
 
-        // ??변?�들
+        // 행 변수들
         {% for rv in row_variables %}
-        const rowVarInput{{ forloop.counter }} = document.createElement('input');
-        rowVarInput{{ forloop.counter }}.type = 'hidden';
-        rowVarInput{{ forloop.counter }}.name = 'row_variables[]';
-        rowVarInput{{ forloop.counter }}.value = '{{ rv }}';
+        const rowVarInput{{ forloop.counter }
+    } = document.createElement('input');
+        rowVarInput{ { forloop.counter } }.type = 'hidden';
+        rowVarInput{ { forloop.counter } }.name = 'row_variables[]';
+        rowVarInput{ { forloop.counter } }.value = '{{ rv }}';
     form.appendChild(rowVarInput{{ forloop.counter }});
     {% endfor %}
 
     {% for cv in col_variables %}
     const colVarInput{{ forloop.counter }} = document.createElement('input');
-    colVarInput{{ forloop.counter }}.type = 'hidden';
-    colVarInput{{ forloop.counter }}.name = 'col_variables[]';
-    colVarInput{{ forloop.counter }}.value = '{{ cv }}';
+    colVarInput{ { forloop.counter } }.type = 'hidden';
+    colVarInput{ { forloop.counter } }.name = 'col_variables[]';
+    colVarInput{ { forloop.counter } }.value = '{{ cv }}';
     form.appendChild(colVarInput{{ forloop.counter }});
     {% endfor %}
 
-    // ?�계???�정 (JSON???�시 개별 ?�드�?
+    // 통계량 설정 (JSON을 다시 개별 필드로)
     try {
         const colStatsJson = '{{ col_statistics|escapejs }}';
         const colStats = JSON.parse(colStatsJson);
@@ -662,7 +665,7 @@
         console.error('Error parsing col_statistics:', e);
     }
 
-    // ?�션
+    // 옵션
     {% if show_total %}
     const totalInput = document.createElement('input');
     totalInput.type = 'hidden';
@@ -679,7 +682,7 @@
     form.appendChild(testInput);
     {% endif %}
 
-    // ?�시 ?�식 ?�션
+    // 표시 형식 옵션
     const percentInput = document.createElement('input');
     percentInput.type = 'hidden';
     percentInput.name = 'percent_symbol';
@@ -692,14 +695,14 @@
     decimalsInput.value = '{{ mean_decimals }}';
     form.appendChild(decimalsInput);
 
-    // 카이?�곱 ?�시 ?�식
+    // 카이제곱 표시 형식
     {% if show_chi_label %} form.appendChild(createInput('show_chi_label', 'on')); {% endif %}
     {% if show_chi_value %} form.appendChild(createInput('show_chi_value', 'on')); {% endif %}
     {% if show_chi_df %} form.appendChild(createInput('show_chi_df', 'on')); {% endif %}
     {% if show_chi_stars %} form.appendChild(createInput('show_chi_stars', 'on')); {% endif %}
     {% if show_chi_pvalue %} form.appendChild(createInput('show_chi_pvalue', 'on')); {% endif %}
 
-    // t/F 검???�시 ?�식
+    // t/F 검정 표시 형식
     {% if show_tf_label %} form.appendChild(createInput('show_tf_label', 'on')); {% endif %}
     {% if show_tf_value %} form.appendChild(createInput('show_tf_value', 'on')); {% endif %}
     {% if show_tf_df %} form.appendChild(createInput('show_tf_df', 'on')); {% endif %}
@@ -709,12 +712,13 @@
     document.body.appendChild(form);
     form.submit();
 
-    // ???�거???�간 지??    setTimeout(() => {
+    // 폼 제거는 약간 지연
+    setTimeout(() => {
         document.body.removeChild(form);
     }, 1000);
     }
 
-    // ?�퍼 ?�수
+    // 헬퍼 함수
     function createInput(name, value) {
         const input = document.createElement('input');
         input.type = 'hidden';
