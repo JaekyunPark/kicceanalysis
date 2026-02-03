@@ -627,19 +627,18 @@
 
         // 행 변수들
         {% for rv in row_variables %}
-        const rowVarInput{{ forloop.counter }
-    } = document.createElement('input');
-        rowVarInput{ { forloop.counter } }.type = 'hidden';
-        rowVarInput{ { forloop.counter } }.name = 'row_variables[]';
-        rowVarInput{ { forloop.counter } }.value = '{{ rv }}';
+        const rowVarInput{{ forloop.counter }} = document.createElement('input');
+        rowVarInput{{ forloop.counter }}.type = 'hidden';
+        rowVarInput{{ forloop.counter }}.name = 'row_variables[]';
+        rowVarInput{{ forloop.counter }}.value = '{{ rv }}';
     form.appendChild(rowVarInput{{ forloop.counter }});
     {% endfor %}
 
     {% for cv in col_variables %}
     const colVarInput{{ forloop.counter }} = document.createElement('input');
-    colVarInput{ { forloop.counter } }.type = 'hidden';
-    colVarInput{ { forloop.counter } }.name = 'col_variables[]';
-    colVarInput{ { forloop.counter } }.value = '{{ cv }}';
+    colVarInput{{ forloop.counter }}.type = 'hidden';
+    colVarInput{{ forloop.counter }}.name = 'col_variables[]';
+    colVarInput{{ forloop.counter }}.value = '{{ cv }}';
     form.appendChild(colVarInput{{ forloop.counter }});
     {% endfor %}
 
