@@ -345,6 +345,57 @@ def perform_unified_analysis(dataset_id, codebook_id, row_variables, col_variabl
     
     return results
 
+def weighted_ttest_pooled(group1, group2, w1, w2):
+    """가중 등분산 가정 t-test (Pooled t-test)"""
+    try:
+        n1 = w1.sum()
+        n2 = w2.sum()
+        
+        m1 = weighted_mean(group1, w1)
+        m2 = weighted_mean(group2, w2)
+        
+        v1 = weighted_std(group1, w1)**2
+        v2 = weighted_std(group2, w2)**2
+        
+        # Pooled Variance
+        # S_p^2 = ((n1-1)v1 + (n2-1)v2) / (n1+n2-2)
+        df = n1 + n2 - 2
+        sp_sq = ((n1 - 1)*v1 + (n2 - 1)*v2) / df
+        
+        se = np.sqrt(sp_sq * (1/n1 + 1/n2))
+        if se == 0: return None
+        
+        t_stat = (m1 - m2) / se
+        
+        # Two-sided p-value
+        p_val = stats.t.sf(np.abs(t_stat), df) * 2
+        return t_stat, p_val, df
+    except:
+        return None
+
+def weighted_levene(groups, weights_list):
+    """가중 Levene 검정 (Weighted Levene's Test) - using Mean"""
+    try:
+        # 1. 각 그룹의 가중 평균 계산
+        group_means = []
+        for g, w in zip(groups, weights_list):
+            group_means.append(weighted_mean(g, w))
+            
+        # 2. 절대 편차(Absolute Deviations) 계산
+        deviations = []
+        dev_weights = []
+        
+        for i, (g, w) in enumerate(zip(groups, weights_list)):
+            mean = group_means[i]
+            dev = np.abs(g - mean)
+            deviations.append(dev)
+            dev_weights.append(w)
+            
+        # 3. 편차들에 대해 Weighted ANOVA 수행
+        return weighted_anova(deviations, dev_weights)
+    except:
+        return None
+
 def perform_combined_freq_desc_analysis(df, row_variables, col_var, stats_config, codebook_data, options, weight_variable=None):
     """빈도 분석과 기술통계를 하나의 테이블로 통합"""
     
@@ -710,27 +761,47 @@ def perform_combined_freq_desc_analysis(df, row_variables, col_var, stats_config
                         
                         # Levene 검정 결과에 따라 적절한 t-test 선택
                         if weights is not None:
-                            # 가중치 t-test 수행 (Welch's logic)
-                            w1 = weights[groups[0].index]
-                            w2 = weights[groups[1].index]
-                            
-                            t_result = weighted_ttest(groups[0], groups[1], w1, w2)
-                            
-                            if t_result:
-                                t_stat, p_value, df_val = t_result
-                                test_name = "t-test (Weighted)"
-                                # 가중치 적용 시 등분산 가정 t-test는 복잡하므로 Welch만 제공하거나,
-                                # 필요한 경우 구현해야 함. 여기서는 Welch 결과만 사용.
-                                t_stat_equal, p_value_equal, df_equal = t_stat, p_value, df_val # Placeholder
-                                t_stat_welch, p_value_welch, df_welch = t_stat, p_value, df_val
-                                levene_stat, levene_p = 0, 1 # Placeholder or implement weighted Levene
-                            else:
-                                raise ValueError("Weighted t-test calculation failed")
+                             # 가중치 t-test 수행
+                             
+                             # 리스트 준비
+                             w1 = weights[groups[0].index]
+                             w2 = weights[groups[1].index]
+                             
+                             # 1. 가중 Levene 검정
+                             levene_result = weighted_levene(groups, [w1, w2])
+                             levene_formatted_str = ""
+
+                             if levene_result:
+                                 f_levene, p_levene, df1_levene, df2_levene = levene_result
+                                 levene_stat, levene_p = f_levene, p_levene
+                                 # Levene 포맷팅
+                                 levene_formatted_str = format_test_statistic(f_levene, (df1_levene, df2_levene), p_levene, tf_format, 'f')
+                             else:
+                                 levene_stat, levene_p = 0, 1 # 실패 시 등분산 가정
+                                 
+                             # 2. 가중 t-test (Welch)
+                             t_welch, p_welch, df_welch_val = weighted_ttest(groups[0], groups[1], w1, w2)
+                             
+                             # 3. 가중 t-test (Pooled/Equal Variance)
+                             t_pooled, p_pooled, df_pooled_val = weighted_ttest_pooled(groups[0], groups[1], w1, w2)
+                             
+                             # 결과 매핑
+                             t_stat_equal, p_value_equal, df_equal = t_pooled, p_pooled, df_pooled_val
+                             t_stat_welch, p_value_welch, df_welch = t_welch, p_welch, df_welch_val
+                             
+                             # 선택 로직
+                             if levene_p < 0.05:
+                                 t_stat, p_value, df_val = t_stat_welch, p_value_welch, df_welch
+                                 test_name = "t-test (Welch)"
+                             else:
+                                 t_stat, p_value, df_val = t_stat_equal, p_value_equal, df_equal
+                                 test_name = "t-test"
                         else:
                             # 기존 unweighted t-test 로직
                             
                             # Levene의 등분산 검정
                             levene_stat, levene_p = sp_stats.levene(groups[0], groups[1])
+                            levene_formatted_str = f"F={levene_stat:.3f} ({levene_p:.3f})"
                             
                             # 등분산 가정 t-test (Student's t-test)
                             t_stat_equal, p_value_equal = sp_stats.ttest_ind(groups[0], groups[1], equal_var=True)
@@ -771,7 +842,8 @@ def perform_combined_freq_desc_analysis(df, row_variables, col_var, stats_config
                             't_welch': t_stat_welch,
                             'p_welch': p_value_welch,
                             'df_welch': df_welch,
-                            'formatted': formatted_stat
+                            'formatted': formatted_stat,
+                            'levene_formatted': levene_formatted_str
                         }
                     except Exception as e:
                         print(f"t-test 실패: {e}")
@@ -1283,25 +1355,50 @@ def perform_descriptive_analysis_combined(df, row_variables, col_var, stats_conf
                     from scipy import stats as sp_stats
                     
                     if weights is not None:
-                         # 가중치 t-test 수행 (Welch's logic)
+                         # 가중치 t-test 수행
+                         
+                         # 리스트 준비
                          w1 = weights[groups[0].index]
                          w2 = weights[groups[1].index]
                          
-                         t_result = weighted_ttest(groups[0], groups[1], w1, w2)
+                         # 1. 가중 Levene 검정
+                         levene_formatted_str = ""
                          
-                         if t_result:
-                             t_stat, p_value, df_val = t_result
-                             test_name = "t-test (Weighted)"
-                             
-                             # 가중치 결과만 사용
-                             t_stat_equal, p_value_equal, df_equal = t_stat, p_value, df_val 
-                             t_stat_welch, p_value_welch, df_welch = t_stat, p_value, df_val
-                             levene_stat, levene_p = 0, 1 
+                         levene_result = weighted_levene(groups, [w1, w2])
+                         if levene_result:
+                             f_levene, p_levene, df1_levene, df2_levene = levene_result
+                             levene_stat, levene_p = f_levene, p_levene
+                             # Levene 결과 포맷팅
+                             levene_formatted_str = format_test_statistic(f_levene, (df1_levene, df2_levene), p_levene, tf_format, 'f')
                          else:
-                             raise ValueError("Weighted t-test failed")
+                             levene_stat, levene_p = 0, 1 # 실패 시 등분산 가정
+                             
+                         # 2. 가중 t-test (Welch)
+                         t_welch, p_welch, df_welch_val = weighted_ttest(groups[0], groups[1], w1, w2)
+                         
+                         # 3. 가중 t-test (Pooled/Equal Variance)
+                         t_pooled, p_pooled, df_pooled_val = weighted_ttest_pooled(groups[0], groups[1], w1, w2)
+                         
+                         # 결과 매핑
+                         t_stat_equal, p_value_equal, df_equal = t_pooled, p_pooled, df_pooled_val
+                         t_stat_welch, p_value_welch, df_welch = t_welch, p_welch, df_welch_val
+                         
+                         # 선택 로직
+                         if levene_p < 0.05:
+                             t_stat, p_value, df_val = t_stat_welch, p_value_welch, df_welch
+                             test_name = "t-test (Welch)"
+                         else:
+                             t_stat, p_value, df_val = t_stat_equal, p_value_equal, df_equal
+                             test_name = "t-test"
+                         
                     else:
+                        # unweighted logic (unchanged)
+                        from scipy import stats as sp_stats
+                        
                         # Levene의 등분산 검정
                         levene_stat, levene_p = sp_stats.levene(groups[0], groups[1])
+                        # Levene 포맷팅
+                        levene_formatted_str = f"F={levene_stat:.3f} ({levene_p:.3f})"
                         
                         # 등분산 가정 t-test (Student's t-test)
                         t_stat_equal, p_value_equal = sp_stats.ttest_ind(groups[0], groups[1], equal_var=True)
@@ -1339,7 +1436,8 @@ def perform_descriptive_analysis_combined(df, row_variables, col_var, stats_conf
                         't_welch': t_stat_welch,
                         'p_welch': p_value_welch,
                         'df_welch': df_welch,
-                        'formatted': formatted_stat
+                        'formatted': formatted_stat,
+                        'levene_formatted': levene_formatted_str
                     }
                 except:
                     pass

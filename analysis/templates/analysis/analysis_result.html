@@ -201,7 +201,10 @@
                         <!-- 기술통계 영역 -->
                         <td colspan="{{ analysis.unified.desc_col_count }}" class="test-statistics">
                             {% if row_var_result.descriptive_test %}
-                            {{ row_var_result.descriptive_test.formatted }}
+                            {{ row_var_result.descriptive_test.formatted }}<br>
+                            {# {% if row_var_result.descriptive_test.levene_formatted %} #}
+                            {# <small class="text-muted" style="font-size: 0.8em;">Levene: {{ row_var_result.descriptive_test.levene_formatted }}</small> #}
+                            {# {% endif %} #}
                             {% endif %}
                         </td>
                         {% else %}
@@ -318,7 +321,11 @@
                     <tr>
                         <td class="row-header">검정 통계량</td>
                         <td colspan="{{ analysis.descriptive.columns|length }}" class="test-statistics">
-                            {{ row_var_result.statistical_test.formatted }}
+                            {{ row_var_result.statistical_test.formatted }}<br>
+                            {# {% if row_var_result.statistical_test.levene_formatted %} #}
+                            {# <small class="text-muted" style="font-size: 0.8em;">Levene: {{
+                                row_var_result.statistical_test.levene_formatted }}</small> #}
+                            {# {% endif %} #}
                         </td>
                     </tr>
                     {% endif %}
