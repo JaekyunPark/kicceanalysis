@@ -203,7 +203,8 @@
                             {% if row_var_result.descriptive_test %}
                             {{ row_var_result.descriptive_test.formatted }}<br>
                             {# {% if row_var_result.descriptive_test.levene_formatted %} #}
-                            {# <small class="text-muted" style="font-size: 0.8em;">Levene: {{ row_var_result.descriptive_test.levene_formatted }}</small> #}
+                            {# <small class="text-muted" style="font-size: 0.8em;">Levene: {{
+                                row_var_result.descriptive_test.levene_formatted }}</small> #}
                             {# {% endif %} #}
                             {% endif %}
                         </td>
@@ -633,6 +634,15 @@
         codebookInput.name = 'codebook_id';
         codebookInput.value = '{{ codebook_id }}';
         form.appendChild(codebookInput);
+        {% endif %}
+
+        // 가중치 변수
+        {% if weight_variable %}
+        const weightInput = document.createElement('input');
+        weightInput.type = 'hidden';
+        weightInput.name = 'weight_variable';
+        weightInput.value = '{{ weight_variable }}';
+        form.appendChild(weightInput);
         {% endif %}
 
         // 행 변수들

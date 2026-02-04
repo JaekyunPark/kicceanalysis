@@ -2163,12 +2163,14 @@ def export_analysis_to_excel(request):
     
     row_variables = request.POST.getlist('row_variables[]')
     col_variables = request.POST.getlist('col_variables[]')
+    weight_variable = request.POST.get('weight_variable')
     
     # 디버깅: 받은 데이터 확인
     print(f"dataset_id: {dataset_id}")
     print(f"codebook_id: {codebook_id}")
     print(f"row_variables: {row_variables}")
     print(f"col_variables: {col_variables}")
+    print(f"weight_variable: {weight_variable}")
     
     # 통계량 설정 파싱
     col_statistics = {}
@@ -2217,7 +2219,8 @@ def export_analysis_to_excel(request):
         col_variables=col_variables,
         col_statistics=col_statistics,
         user=user,
-        options=options
+        options=options,
+        weight_variable=weight_variable
     )
     
     # 엑셀 워크북 생성
